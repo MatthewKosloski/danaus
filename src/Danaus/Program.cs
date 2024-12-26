@@ -3,39 +3,45 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using SkiaSharp;
 using System.Drawing;
+using Danaus.Url;
 
 class Program
 {
 
     unsafe static int Main(string[] args)
     {
-        var window = CreateWindow();
 
-        if (window == null)
-        {
-            // Failed to create a window.
-            GLFW.Terminate();
-            return -1;
-        }
+        var input = "https://google.com/";
 
-        GLFW.SetKeyCallback(window, KeyCallback);
+        var result = URLParser.Parse(input);
 
-        GLFW.MakeContextCurrent(window);
+        // var window = CreateWindow();
 
-        var skContext = GenerateSkiaContext();
-        var skSurface = GenerateSkiaSurface(skContext, new Size(800, 600));
+        // if (window == null)
+        // {
+        //     // Failed to create a window.
+        //     GLFW.Terminate();
+        //     return -1;
+        // }
 
-        var canvas = skSurface.Canvas;
+        // GLFW.SetKeyCallback(window, KeyCallback);
 
-        while (!GLFW.WindowShouldClose(window))
-        {
-            Run(canvas);
-            canvas.Flush();
-            GLFW.SwapBuffers(window);
-            GLFW.PollEvents();
-        }
+        // GLFW.MakeContextCurrent(window);
 
-        GLFW.Terminate();
+        // var skContext = GenerateSkiaContext();
+        // var skSurface = GenerateSkiaSurface(skContext, new Size(800, 600));
+
+        // var canvas = skSurface.Canvas;
+
+        // while (!GLFW.WindowShouldClose(window))
+        // {
+        //     Run(canvas);
+        //     canvas.Flush();
+        //     GLFW.SwapBuffers(window);
+        //     GLFW.PollEvents();
+        // }
+
+        // GLFW.Terminate();
 
         return 0;
     }
