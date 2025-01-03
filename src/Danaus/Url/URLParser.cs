@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace Danaus.Url;
 
@@ -46,32 +47,43 @@ public enum State
 
 public enum CodePoint
 {
+    Ampersand = 0x0026,
+    Asterisk = 0x002A,
     Apostrophe = 0x0027,
     ApplicationProgramCommand = 0x009F,
     CarriageReturn = 0x000D,
+    CircumflexAccent = 0x005E,
     Colon = 0x003A,
     Comma = 0x002C,
     CommercialAt = 0x0040,
     Delete = 0x007F,
+    DollarSign = 0x0024,
     EqualsSign = 0x003D,
     ExclamationMark = 0x0021,
     GraveAccent = 0x0060,
     GreaterThanSign = 0x003E,
     HyphenMinus = 0x002D,
     LeftCurlyBracket = 0x007B,
+    LeftParenthesis = 0x0028,
+    LeftSquareBracket = 0x005B,
     LessThanSign = 0x003C,
     LineFeed = 0x000A,
     LowercaseA = 0x0061,
+    LowercaseF = 0x0066,
     LowercaseZ = 0x007A,
+    LowLine = 0x005F,
     Nine = 0x0039,
     NullCharacter = 0x0000,
     Number = 0x0023,
+    PercentSign = 0x0025,
     Period = 0x002E,
     Plus = 0x002B,
     QuestionMark = 0x003F,
     QuotationMark = 0x022,
     ReverseSolidus = 0x005C,
     RightCurlyBracket = 0x007D,
+    RightParenthesis = 0x0029,
+    RightSquareBracket = 0x005D,
     Semicolon = 0x003B,
     Solidus = 0x002F,
     Space = 0x0020,
@@ -79,6 +91,7 @@ public enum CodePoint
     Tilde = 0x007E,
     UnitSeparator = 0x001F,
     UppercaseA = 0x0041,
+    UppercaseF = 0x0046,
     UppercaseZ = 0x005A,
     VerticalLine = 0x007C,
     Zero = 0x0030,
@@ -110,10 +123,17 @@ public class URLParser
         var url = BasicParse(input, baseUrl, encoding);
 
         // 2. If url is failure, return failure.
-        // TODO
+        // FIXME
+        if (url is null)
+        {
+            throw new Exception("Failed to parse");
+        }
 
         // 3. If url's scheme is not "blob", return url.
-        // TODO
+        if (!url.HasBlobScheme())
+        {
+            return url;
+        }
 
         // 4. Set url's blob URL entry to the result of resolving the blob URL url, if that did not return failure, and null otherwise.
         // TODO
@@ -609,7 +629,613 @@ public class URLParser
                 case State.Host:
                 case State.Hostname:
                 {
-                    // Continue.
+                    // 1. If state override is given and url’s scheme is "file", then decrease pointer by 1 and set state to file host state.
+                    if (hasStateOverride && url.HasFileScheme())
+                    {
+                        pointer--;
+                        state = State.FileHost;
+                    }
+                    // 2. Otherwise, if c is U+003A (:) and insideBrackets is false, then:
+                    else if (IsOneOf(c, CodePoint.Colon) && !insideBrackets)
+                    {
+                        // 1. If buffer is the empty string, host-missing validation error, return failure.
+                        if (buffer == string.Empty)
+                        {
+                            hasValidationError = true;
+                        }
+                        
+                        // 2. If state override is given and state override is hostname state, then return.
+                        if (hasStateOverride && stateOverride == State.Hostname)
+                        {
+                            return url;
+                        }
+                        
+                        // 3. Let host be the result of host parsing buffer with url is not special.
+                        var host = ParseHost(buffer, !url.IsSpecial());
+                        
+                        // FIXME: 4. If host is failure, then return failure.
+                        if (host == string.Empty)
+                        {
+                            
+                        } 
+
+                        // 5. Set url’s host to host, buffer to the empty string, and state to port state.
+                        url.Host = host;
+                        buffer = string.Empty;
+                        state = State.Port;
+                    }
+                    // 3. Otherwise, if one of the following is true:
+                    //      - c is the EOF code point, U+002F (/), U+003F (?), or U+0023 (#)
+                    //      - url is special and c is U+005C (\)
+                    else if (IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number) || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
+                    {
+                        // then decrease pointer by 1, and then:
+                        pointer--;
+
+                        // 1. If url is special and buffer is the empty string,
+                        //    host-missing validation error, return failure.
+                        if (url.IsSpecial() && buffer == string.Empty)
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+                        // 2. Otherwise, if state override is given, buffer is the empty string, 
+                        //    and either url includes credentials or url’s port is non-null, return.
+                        else if (hasStateOverride && buffer == string.Empty && (url.IncludesCredentials() || url.Port is not null))
+                        {
+                            return url;
+                        }
+
+                        // 3. Let host be the result of host parsing buffer with url is not special.
+                        var host = ParseHost(buffer, !url.IsSpecial());
+
+                        // FIXME: 4. If host is failure, then return failure.
+                        if (host == string.Empty)
+                        {
+                            
+                        } 
+
+                        // 5. Set url’s host to host, buffer to the empty string, and state to path start state.
+                        url.Host = host;
+                        buffer = string.Empty;
+                        state = State.PathStart;
+
+                        // 6. If state override is given, then return.
+                        if (hasStateOverride)
+                        {
+                            return url;
+                        }
+                    }
+                    // Otherwise:
+                    else
+                    {
+                        // 1. If c is U+005B ([), then set insideBrackets to true.
+                        if (IsOneOf(c, CodePoint.LeftSquareBracket))
+                        {
+                            insideBrackets = true;
+                        }
+                        
+                        // 2. If c is U+005D (]), then set insideBrackets to false.
+                        if (IsOneOf(c, CodePoint.RightSquareBracket))
+                        {
+                            insideBrackets = false;
+                        }
+                        
+                        // 3. Append c to buffer.
+                        buffer += c;
+                    }
+
+                    break;
+                }
+                case State.Port:
+                {
+                    // 1. If c is an ASCII digit, append c to buffer.
+                    if (IsASCIIDigit(c))
+                    {
+                        buffer += c;
+                    }
+                    // 2. Otherwise, if one of the following is true:
+                    //      - c is the EOF code point, U+002F (/), U+003F (?), or U+0023 (#)
+                    //      - url is special and c is U+005C (\)
+                    //      - state override is given
+                    else if (IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number)
+                        || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
+                        || hasStateOverride)
+                    {
+                        // 1. If buffer is not the empty string, then:
+                        if (buffer != string.Empty)
+                        {
+                            // 1. Let port be the mathematical integer value that is represented by buffer
+                            //    in radix-10 using ASCII digits for digits with values 0 through 9.
+                            var port = ParseASCIIInt(buffer);
+
+                            // 2. If port is not a 16-bit unsigned integer, port-out-of-range validation error, return failure.
+                            var isU16 = port >= ushort.MinValue && port <= ushort.MaxValue;
+                            if (!isU16)
+                            {
+                                // FIXME
+                                hasValidationError = true;
+                            }
+
+                            // 3. Set url’s port to null, if port is url’s scheme’s default port;
+                            //    otherwise to port.
+                            url.Port = port != url.SpecialScheme?.Port
+                                ? (ushort)port
+                                : null;
+
+                            // 4. Set buffer to the empty string.
+                            buffer = string.Empty;
+                        }
+
+                        // 2. If state override is given, then return.
+                        if (hasStateOverride)
+                        {
+                            return url;
+                        }
+
+                        // 3. Set state to path start state and decrease pointer by 1.
+                        state = State.PathStart;
+                        pointer--;
+                    }
+                    // 3. Otherwise, port-invalid validation error, return failure.
+                    else
+                    {
+                        // FIXME
+                        hasValidationError = true;
+                    }
+
+                    break;
+                }
+                case State.File:
+                {
+                    // 1. Set url’s scheme to "file".
+                    // 2. Set url’s host to the empty string.
+                    url.Scheme = "file";
+                    url.Host = string.Empty;
+
+                    // 3. If c is U+002F (/) or U+005C (\), then:
+                    if (IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus))
+                    {
+                        // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
+                        if (IsOneOf(c, CodePoint.ReverseSolidus))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. Set state to file slash state.
+                        state = State.FileSlash;
+                    }
+                    // 4. Otherwise, if base is non-null and base’s scheme is "file":
+                    else if (baseUrl is not null && baseUrl.HasFileScheme())
+                    {
+                        // 1. Set url’s host to base’s host, url’s path to a clone of base’s path,
+                        //    and url’s query to base’s query.
+                        url.Host = baseUrl.Host;
+                        url.Path = [.. baseUrl.Path];
+                        url.Query = baseUrl.Query;
+
+                        // 2. If c is U+003F (?), then set url’s query to the empty string and state to query state.
+                        if (IsOneOf(c, CodePoint.QuestionMark))
+                        {
+                            url.Query = string.Empty;
+                            state = State.Query;
+                        }
+                        // 3. Otherwise, if c is U+0023 (#), set url’s fragment to the empty string and state to fragment state.
+                        else if (IsOneOf(c, CodePoint.Number))
+                        {
+                            url.Fragment = string.Empty;
+                            state = State.Fragment;
+                        }
+                        // 4. Otherwise:
+                        else
+                        {
+                            // 1. Set url’s query to null.
+                            url.Query = null;
+
+                            // 2. If the code point substring from pointer to the end of input
+                            //    does not start with a Windows drive letter, then shorten url’s path.
+                            if (!IsWindowsDriveLetter(input[pointer..][0] + ""))
+                            {
+                                ShortenURLPath(url);
+                            }
+                            // 3. Otherwise:
+                            else
+                            {
+                                // 1. File-invalid-Windows-drive-letter validation error.
+                                // FIXME
+                                hasValidationError = true;
+                                url.Path = [" "];
+                            }
+
+                            // 4. Set state to path state and decrease pointer by 1.
+                            state = State.Path;
+                            pointer--;
+                        }
+                    }
+                    // 5. Otherwise, set state to path state, and decrease pointer by 1.
+                    else
+                    {
+                        state = State.Path;
+                        pointer--;
+                    }
+                    break;
+                }
+                case State.FileSlash:
+                {
+                    // 1. If c is U+002F (/) or U+005C (\), then:
+                    if (IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus))
+                    {
+                        // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
+                        if (IsOneOf(c, CodePoint.ReverseSolidus))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. Set state to file host state.
+                        state = State.FileHost;
+                    }
+                    // 2. Otherwise:
+                    else
+                    {
+                        // 1. If base is non-null and base’s scheme is "file", then:
+                        if (baseUrl is not null && baseUrl.HasFileScheme())
+                        {
+                            // 1. Set url’s host to base’s host.
+                            url.Host = baseUrl.Host;
+
+                            // 2. If the code point substring from pointer to the end of input
+                            //    does not start with a Windows drive letter and
+                            //    base’s path[0] is a normalized Windows drive letter, then
+                            //    append base’s path[0] to url’s path.
+                            if (!IsWindowsDriveLetter(input[pointer..][0] + "") && IsNormalizedWindowsDriveLetter(baseUrl.Path[0]))
+                            {
+                                url.Path.Add(baseUrl.Path[0]);
+                            }
+                        }
+
+                        // 2. Set state to path state, and decrease pointer by 1.
+                        state = State.Path;
+                        pointer--;
+                    }
+                    break;
+                }
+                case State.FileHost:
+                {
+                    // 1. If c is the EOF code point, U+002F (/), U+005C (\), U+003F (?),
+                    //    or U+0023 (#), then decrease pointer by 1 and then:
+                    if (IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus, CodePoint.QuestionMark, CodePoint.Number))
+                    {
+                        pointer--;
+
+                        // 1. If state override is not given and buffer is a Windows drive letter,
+                        //    file-invalid-Windows-drive-letter-host validation error, set state to path state.
+                        if (!hasStateOverride && IsWindowsDriveLetter(buffer))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                            state = State.Path;
+                        }
+                        // 2. Otherwise, if buffer is the empty string, then:
+                        else if (buffer == string.Empty)
+                        {
+                            // 1. Set url’s host to the empty string.
+                            url.Host = string.Empty;
+
+                            // 2. If state override is given, then return.
+                            if (hasStateOverride)
+                            {
+                                return url;
+                            }
+
+                            // 3. Set state to path start state.
+                            state = State.Path;
+                        }
+                        // 3. Otherwise, run these steps:
+                        else
+                        {
+                            // 1. Let host be the result of host parsing buffer with url is not special.
+                            var host = ParseHost(buffer, !url.IsSpecial());
+
+                            // FIXME
+                            // 2. If host is failure, then return failure.
+                            if (host == string.Empty)
+                            {
+
+                            }
+
+                            // 3. If host is "localhost", then set host to the empty string.
+                            if (host == "localhost")
+                            {
+                                host = string.Empty;
+                            }
+
+                            // 4. Set url’s host to host.
+                            url.Host = host;
+
+                            // 5. If state override is given, then return.
+                            if (hasStateOverride)
+                            {
+                                return url;
+                            }
+
+                            // 6. Set buffer to the empty string and state to path start state.
+                            buffer = string.Empty;
+                            state = State.PathStart;
+                        }
+                    }
+                    // 2. Otherwise, append c to buffer.
+                    else
+                    {
+                        buffer += c;
+                    }
+
+                    break;
+                }
+                case State.PathStart:
+                {
+                    // 1. If url is special, then:
+                    if (url.IsSpecial())
+                    {
+                        // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
+                        if (IsOneOf(c, CodePoint.ReverseSolidus))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. Set state to path state.
+                        state = State.Path;
+
+                        // 3. If c is neither U+002F (/) nor U+005C (\), then decrease pointer by 1.
+                        if (!IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus))
+                        {
+                            pointer--;
+                        }
+                    }
+                    // 2. Otherwise, if state override is not given and c is U+003F (?),
+                    //    set url’s query to the empty string and state to query state.
+                    else if (!hasStateOverride && IsOneOf(c, CodePoint.QuestionMark))
+                    {
+                        url.Query = string.Empty;
+                        state = State.Query;
+                    }
+                    // 3. Otherwise, if state override is not given and c is U+0023 (#),
+                    //    set url’s fragment to the empty string and state to fragment state.
+                    else if (!hasStateOverride && IsOneOf(c, CodePoint.Number))
+                    {
+                        url.Fragment = string.Empty;
+                        state = State.Fragment;
+                    }
+                    // 5. Otherwise, if state override is given and url’s host is null,
+                    //    append the empty string to url’s path.
+                    else if (hasStateOverride && url.Host is null)
+                    {
+                        url.Path.Add(string.Empty);
+                    }
+                    // 4. Otherwise, if c is not the EOF code point:
+                    else
+                    {
+                        // 1. Set state to path state.
+                        state = State.Path;
+
+                        // 2. If c is not U+002F (/), then decrease pointer by 1.
+                        if (!IsOneOf(c, CodePoint.Solidus))
+                        {
+                            pointer--;
+                        }
+                    }
+                    break;
+                }
+                case State.Path:
+                {
+                    // 1. If one of the following is true:
+                    //      - c is the EOF code point or U+002F (/)
+                    //      - url is special and c is U+005C (\)
+                    //      - state override is not given and c is U+003F (?) or U+0023 (#)
+                    if (IsOneOf(c, CodePoint.Solidus)
+                        || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
+                        || (!hasStateOverride && IsOneOf(c, CodePoint.QuestionMark, CodePoint.Number)))
+                    {
+                        // 1. If url is special and c is U+005C (\), invalid-reverse-solidus validation error.
+                        if (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. If buffer is a double-dot URL path segment, then:
+                        if (IsDoubleDotURLPathSegment(buffer))
+                        {
+                            // 1. Shorten url’s path.
+                            ShortenURLPath(url);
+                            // 2. If neither c is U+002F (/), nor url is special and c is U+005C (\),
+                            //    append the empty string to url’s path.
+                            if (!IsOneOf(c, CodePoint.Solidus) || !(url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
+                            {
+                                url.Path.Add(string.Empty);
+                            }
+                        }
+                        // 3. Otherwise, if buffer is a single-dot URL path segment
+                        //    and if neither c is U+002F (/), nor url is special and c is U+005C (\),
+                        //    append the empty string to url’s path.
+                        else if (IsSingleDotURLPathSegment(buffer) && (!IsOneOf(c, CodePoint.Solidus) || !(url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))))
+                        {
+                            url.Path.Add(string.Empty);
+                        }
+                        // 4. Otherwise, if buffer is not a single-dot URL path segment, then:
+                        else if (!IsSingleDotURLPathSegment(buffer))
+                        {
+                            // 1. If url’s scheme is "file", url’s path is empty, and buffer is a Windows drive letter,
+                            //    then replace the second code point in buffer with U+003A (:).
+                            if (url.HasFileScheme() && url.HasEmptyPath() && IsWindowsDriveLetter(buffer))
+                            {
+                                buffer = buffer[..1] + ":" + buffer[2..];
+                            }
+
+                            // 2. Append buffer to url’s path.
+                            url.Path.Add(buffer);
+                        }
+
+                        // 5. Set buffer to the empty string.
+                        buffer = string.Empty;
+
+                        // 6. If c is U+003F (?), then set url’s query to the empty string and state to query state.
+                        if (IsOneOf(c, CodePoint.QuestionMark))
+                        {
+                            url.Query = string.Empty;
+                            state = State.Query;
+                        }
+
+                        // 7. If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
+                        if (IsOneOf(c, CodePoint.Number))
+                        {
+                            url.Fragment = string.Empty;
+                            state = State.Fragment;
+                        }
+                    }
+                    // 2. Otherwise, run these steps:
+                    else
+                    {
+                        // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
+                        if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
+                        //    invalid-URL-unit validation error.
+                        if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+                        
+                        // 3. UTF-8 percent-encode c using the path percent-encode set and append the result to buffer.
+                        buffer += UTF8PercentEncode(c, PercentEncodeSet.Path);
+                    }
+                    break;
+                }
+                case State.OpaquePath:
+                {
+                    // 1. If c is U+003F (?), then set url’s query to the empty string and state to query state.
+                    if (IsOneOf(c, CodePoint.QuestionMark))
+                    {
+                        url.Query = string.Empty;
+                        state = State.Query;
+                    }
+                    // 2. Otherwise, if c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
+                    else if (IsOneOf(c, CodePoint.Number))
+                    {
+                        url.Fragment = string.Empty;
+                        state = State.Fragment;
+                    }
+                    // 3. Otherwise:
+                    else
+                    {
+                        // 1. If c is not the EOF code point, not a URL code point,
+                        //    and not U+0025 (%), invalid-URL-unit validation error.
+                        if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
+                        //    invalid-URL-unit validation error.
+                        if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 3. If c is not the EOF code point, UTF-8 percent-encode c
+                        //    using the C0 control percent-encode set and append the result to url’s path.
+                        url.Path.Add(UTF8PercentEncode(c, PercentEncodeSet.C0Control));
+                    }
+
+                    break;
+                }
+                case State.Query:
+                {
+                    // 1. If encoding is not UTF-8 and one of the following is true:
+                    //      - url is not special
+                    //      - url’s scheme is "ws" or "wss"
+                    if (encoding != Encoding.UTF8 && (!url.IsSpecial() || url.HasWsScheme() || url.HasWssScheme()))
+                    {
+                        // then set encoding to UTF-8.
+                        encoding = Encoding.UTF8;
+                    }
+
+                    // 2. If one of the following is true:
+                    //      - state override is not given and c is U+0023 (#)
+                    //      - c is the EOF code point
+                    if (!hasStateOverride && IsOneOf(c, CodePoint.Number))
+                    {
+                        // 1. Let queryPercentEncodeSet be the special-query percent-encode set
+                        //    if url is special; otherwise the query percent-encode set.
+                        var queryPercentEncodeSet = url.IsSpecial()
+                            ? PercentEncodeSet.SpecialQuery
+                            : PercentEncodeSet.Query;
+
+                        // FIXME: 2. Percent-encode after encoding, with encoding, buffer, and queryPercentEncodeSet,
+                        //    and append the result to url’s query.
+
+                        // 3. Set buffer to the empty string.
+                        buffer = string.Empty;
+
+                        // 4. If c is U+0023 (#), then set url’s fragment to the empty string and state to fragment state.
+                        if (IsOneOf(c, CodePoint.Number))
+                        {
+                            url.Fragment = string.Empty;
+                            state = State.Fragment;
+                        }
+                    }
+                    // 3. Otherwise, if c is not the EOF code point:
+                    else
+                    {
+                        // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
+                        if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
+                        //    invalid-URL-unit validation error.
+                        if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 3. Append c to buffer.
+                        buffer += c;
+                    }
+                    break;
+                }
+                case State.Fragment:
+                {
+                    // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
+                    if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                    {
+                        // FIXME
+                        hasValidationError = true;
+                    }
+
+                    // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
+                    //    invalid-URL-unit validation error.
+                    if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                    {
+                        // FIXME
+                        hasValidationError = true;
+                    }   
+
+                    // 3. UTF-8 percent-encode c using the fragment percent-encode set and append the result to url’s fragment.
+                    url.Fragment += UTF8PercentEncode(c, PercentEncodeSet.Fragment);
+
                     break;
                 }
                 default:
@@ -618,6 +1244,11 @@ public class URLParser
 
             // TODO: Do we need this?
             pointer++;
+        }
+
+        if (hasValidationError)
+        {
+            return null;
         }
 
         return url;
@@ -837,6 +1468,84 @@ public class URLParser
         }
     }
 
+    private static string UTF8PercentDecode(string input)
+    {
+        // 1. Let output be an empty byte sequence.
+        StringBuilder builder = new();
+
+        // 2. For each byte byte in input:
+        for (int i = 0; i < input.Length; i++)
+        {
+            var c = input[i];
+            var isPercentSign = c == (uint)CodePoint.PercentSign;
+
+            // 1. If byte is not 0x25 (%), then append byte to output.
+            if (!isPercentSign)
+            {
+                builder.Append(c);
+            }
+            // 2. Otherwise, if byte is 0x25 (%) and the next two bytes after byte in input are not
+            //    in the ranges 0x30 (0) to 0x39 (9), 0x41 (A) to 0x46 (F), and 0x61 (a) to 0x66 (f),
+            //    all inclusive, append byte to output.
+            else if (isPercentSign && i + 2 < input.Length && !IsASCIIHexDigit(input[i + 1]) && !IsASCIIHexDigit(input[i + 2]))
+            {
+                builder.Append(c);
+            }
+            // 3. Otherwise:
+            else
+            {
+                // 1. Let bytePoint be the two bytes after byte in input, decoded, and then interpreted as hexadecimal number.
+                //    NOTE: We shift left to append the next byte.
+                byte bytePoint = (byte)((ParseASCIIHexDigit(input[i + 1]) << 4) | ParseASCIIHexDigit(input[i + 1]));
+
+                // 2. Append a byte whose value is bytePoint to output.
+                builder.Append(bytePoint);
+
+                // 3. Skip the next two bytes in input.
+                i+=2;
+            }
+        }
+
+        // 3. Return output.
+        return builder.ToString();
+    }
+
+    private static uint ParseASCIIHexDigit(char c)
+    {
+        if (IsASCIIHexDigit(c))
+        {
+            return c;
+        }
+        else
+        {
+            throw new Exception("Verify not reached.");
+        }
+    }
+
+    private static int ParseASCIIInt(string input)
+    {
+        StringBuilder str = new();
+
+        foreach (char c in input)
+        {
+            if (IsASCIIDigit(c))
+            {
+                str.Append(c);
+            }
+            else
+            {
+                throw new Exception("Verify not reached");
+            }
+        }
+
+        if (!int.TryParse(str.ToString(), out int result))
+        {
+            throw new Exception("Verify not reached");
+        }
+        
+        return result;
+    }
+
     // https://url.spec.whatwg.org/#host-parsing
     private static string ParseHost(string input, bool isOpaque = false)
     {
@@ -846,7 +1555,8 @@ public class URLParser
             // 1. If input does not end with U+005D (]), IPv6-unclosed validation error, return failure.
             if (!input.EndsWith(']'))
             {
-                
+                // FIXME
+                return string.Empty;
             }
 
             // 2. Return the result of IPv6 parsing input with its leading U+005B ([) and trailing U+005D (]) removed.
@@ -863,17 +1573,57 @@ public class URLParser
         Debug.Assert(input != string.Empty);
 
         // 4. Let domain be the result of running UTF-8 decode without BOM on the percent-decoding of input.
+        var domain = UTF8PercentDecode(input);
+
+        // 5. FIXME: Let asciiDomain be the result of running domain to ASCII with domain and false.
+
+        // 6. FIXME: If asciiDomain is failure, then return failure.
+
+        // 7. FIXME: If asciiDomain ends in a number, then return the result of IPv4 parsing asciiDomain.
+
+        // 8. FIXME: Return asciiDomain.
+        return domain;
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
     private static string ParseOpaqueHost(string input)
     {
-        return string.Empty;
-    }
+        // 1. If input contains a forbidden host code point, host-invalid-code-point validation error, return failure.
+        if (input.Any(IsForbiddenHostCodePoint))
+        {
+            // FIXME
+            return string.Empty;
+        }
 
-    private static string ParseIPv4Address(string input)
-    {
-        return string.Empty;
+        // 2. If input contains a code point that is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
+        if (input.Any((c) => !(IsURLCodePoint(c) || IsOneOf(c, CodePoint.PercentSign))))
+        {
+            // FIXME
+            return string.Empty;
+        }
+
+        // 3. If input contains a U+0025 (%) and the two code points following it are not ASCII hex digits, invalid-URL-unit validation error.
+        for (int i = 0; i < input.Length; i++)
+        {
+            var isPercentSign = input[i] == (uint)CodePoint.PercentSign;
+            var hasAtLeastTwoCharsOfLookahead = i + 2 < input.Length;
+            var isInvalid = !(isPercentSign && hasAtLeastTwoCharsOfLookahead && IsASCIIHexDigit(input[i +1]) && IsASCIIDigit(input[i + 2]));
+            
+            if (isInvalid)
+            {
+                // FIXME
+                return string.Empty;
+            }
+        }
+        
+        // 4. Return the result of running UTF-8 percent-encode on input using the C0 control percent-encode set.
+        var result = new StringBuilder();
+        foreach (char c in input)
+        {
+            result.Append(UTF8PercentEncode(c, PercentEncodeSet.C0Control));
+        }
+
+        return result.ToString();
     }
 
     private static string ParseIPv6Address(string input)
@@ -921,6 +1671,21 @@ public class URLParser
         return c >= (uint)CodePoint.Zero && c <= (uint)CodePoint.Nine; 
     }
 
+    private static bool IsASCIIUpperHexDigit(char c)
+    {
+        return IsASCIIDigit(c) || (c >= (uint)CodePoint.UppercaseA && c <= (uint)CodePoint.UppercaseF); 
+    }
+
+    private static bool IsASCIILowerHexDigit(char c)
+    {
+        return IsASCIIDigit(c) || (c >= (uint)CodePoint.LowercaseA && c <= (uint)CodePoint.LowercaseF); 
+    }
+
+    public static bool IsASCIIHexDigit(char c)
+    {
+        return IsASCIIUpperHexDigit(c) || IsASCIILowerHexDigit(c);
+    }
+
     private static bool IsASCIIUpperAlpha(char c)
     {
         return c >= (uint)CodePoint.UppercaseA && c <= (uint)CodePoint.UppercaseZ;
@@ -948,7 +1713,12 @@ public class URLParser
 
     private static bool IsOneOf(uint c, params CodePoint[] codePoints)
     {
-        return codePoints.Any(codePoint => (uint)codePoint == c);
+        return IsOneOf(c, codePoints.Select((codePoint) => (uint)codePoint));
+    }
+
+    private static bool IsOneOf(uint c, IEnumerable<uint> codePoints)
+    {
+        return codePoints.Any(codePoint => codePoint == c);
     }
 
     private static bool IsWindowsDriveLetter(string s)
@@ -959,5 +1729,68 @@ public class URLParser
     private static bool IsNormalizedWindowsDriveLetter(string s)
     {
         return IsWindowsDriveLetter(s) && IsOneOf(s[1], CodePoint.Colon);
+    }
+
+    private static bool IsLeadingSurrogate(char c)
+    {
+        return c >= 0xD800 && c <= 0xDBFF;
+    }
+
+    private static bool IsTrailingSurrogate(char c)
+    {
+        return c >= 0xDC00 && c <= 0xDFFF;
+    }
+
+    private static bool IsSurrogate(char c)
+    {
+        return IsLeadingSurrogate(c) || IsTrailingSurrogate(c);
+    }
+
+    private static bool IsNonCharacter(char c)
+    {
+        return (c >= 0xFDD0 && c <= 0xFDEF) || IsOneOf(c, [
+            0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE,
+            0x4FFFF, 0x5FFFE, 0x5FFFF, 0x6FFFE, 0x6FFFF, 0x7FFFE, 0x7FFFF, 0x8FFFE, 0x8FFFF,
+            0x9FFFE, 0x9FFFF, 0xAFFFE, 0xAFFFF, 0xBFFFE, 0xBFFFF, 0xCFFFE, 0xCFFFF, 0xDFFFE,
+            0xDFFFF, 0xEFFFE, 0xEFFFF, 0xFFFFE, 0xFFFFF, 0x10FFFE, 0x10FFFF
+        ]);
+    }
+
+    private static bool IsURLCodePoint(char c)
+    {
+        return IsASCIIAlphaNumeric(c)
+            || IsOneOf(c, CodePoint.ExclamationMark, CodePoint.DollarSign, CodePoint.Ampersand,
+                CodePoint.Apostrophe, CodePoint.LeftParenthesis, CodePoint.RightParenthesis,
+                CodePoint.Asterisk, CodePoint.Plus, CodePoint.Comma, CodePoint.HyphenMinus,
+                CodePoint.Period, CodePoint.Solidus, CodePoint.Colon, CodePoint.Semicolon,
+                CodePoint.EqualsSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LowLine,
+                CodePoint.Tilde)
+            ||  (c >= 0x00A0 && c <= 0x10FFFD && !IsSurrogate(c) && !IsNonCharacter(c));
+    }
+
+    private static bool IsForbiddenHostCodePoint(char c)
+    {
+        return IsOneOf(c,
+            CodePoint.NullCharacter, CodePoint.Tab, CodePoint.LineFeed, CodePoint.CarriageReturn,
+            CodePoint.Space, CodePoint.Number, CodePoint.Solidus, CodePoint.Colon, CodePoint.LessThanSign,
+            CodePoint.GreaterThanSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LeftSquareBracket,
+            CodePoint.ReverseSolidus, CodePoint.RightSquareBracket, CodePoint.CircumflexAccent, CodePoint.VerticalLine);
+    }
+
+    private static bool IsSingleDotURLPathSegment(string input)
+    {
+        return new List<string>([".", "%2e"]).Any((segment) =>
+            string.Equals(segment, input, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsDoubleDotURLPathSegment(string input)
+    {
+        return new List<string>(["..", ".%2e", "%2e.", "%2e%2e"]).Any((segment) =>
+            string.Equals(segment, input, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool StartsWithTwoASCIIHexDigits(string input)
+    {
+        return input.Length >= 2 && IsASCIIHexDigit(input[0]) && IsASCIIHexDigit(input[1]);
     }
 }

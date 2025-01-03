@@ -50,6 +50,16 @@ public class URL(
         return Host == string.Empty;
     }
 
+    public bool HasEmptyPath()
+    {
+        return Path.Count == 0;
+    }
+
+    public bool HasBlobScheme()
+    {
+        return Scheme == "blob";
+    }
+
     public bool HasFtpScheme()
     {
         return Scheme == SpecialScheme.Ftp.Scheme;
