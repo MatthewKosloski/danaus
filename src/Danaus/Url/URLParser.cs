@@ -115,19 +115,31 @@ public class BasicParseResult(URL? url, BasicParseFailure? failure)
 
 public class URLParser
 {
+    private const uint END_OF_FILE = 0xFFFFFFFF;
+
+    private string buffer;
+
+    private string input;
+
+    private int pointer;
+
+    private State state;
+
+    public URLParser()
+    {
+        buffer = string.Empty;
+        input = string.Empty;
+        pointer = 0;
+        state = State.SchemeStart;
+    }
 
     // https://url.spec.whatwg.org/#url-parsing
-    public static URL Parse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8)
+    public URL Parse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8)
     {
+        this.input = input;
+        
         // 1. Let url be the result of running the basic URL parser on input with base and encoding.
-        var url = BasicParse(input, baseUrl, encoding);
-
-        // 2. If url is failure, return failure.
-        // FIXME
-        if (url is null)
-        {
-            throw new Exception("Failed to parse");
-        }
+        var url = BasicParse(input, baseUrl, encoding) ?? throw new Exception("Failed to parse");
 
         // 3. If url's scheme is not "blob", return url.
         if (!url.HasBlobScheme())
@@ -144,13 +156,11 @@ public class URLParser
     }
 
     // https://url.spec.whatwg.org/#concept-basic-url-parser
-    private static URL? BasicParse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8, URL? url = null, State? stateOverride = null)
+    private URL? BasicParse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8, URL? url = null, State? stateOverride = null)
     {
-
         var hasStateOverride = stateOverride is not null;
         var processedInput = input;
         var hasValidationError = false;
-
 
         // 1. If url is not given:
         if (url == null)
@@ -203,26 +213,26 @@ public class URLParser
         }
 
         // 4. Let state be state override if given, or scheme start state otherwise.
-        var state = stateOverride ?? State.SchemeStart;
+        state = stateOverride ?? State.SchemeStart;
 
         // 5. Set encoding to the result of getting an output encoding from encoding.
         // TODO
 
         // 6. Let buffer be the empty string.
-        var buffer = string.Empty;
+        buffer = string.Empty;
 
         // 7. Let atSignSeen, insideBrackets, and passwordTokenSeen be false.
         bool atSignSeen = false, insideBrackets = false, passwordTokenSeen = false;
 
         // 8. Let pointer be a pointer for input.
-        var pointer = 0;
+        pointer = 0;
 
         // 9. Keep running the following state machine by switching on state. 
-        //    If, after a run, pointer points to the EOF code point, go to the next step.
-        //    Otherwise, increase pointer by 1 and continue with the state machine.
-        while (pointer < input.Length)
+        while (true)
         {
-            char c = input[pointer];
+            uint c = IsEOF()
+                ? END_OF_FILE
+                : input[pointer];
 
             switch (state)
             {
@@ -230,7 +240,7 @@ public class URLParser
                     // 1. If c is an ASCII alpha, append c, lowercased, to buffer, and set state to scheme state.
                     if (IsASCIIAlpha(c))
                     {
-                        buffer += char.ToLower(c);
+                        buffer += char.ToLower((char)c);
                         state = State.Scheme;
                     }
                     // 2. Otherwise, if state override is not given, set state to no scheme state and decrease pointer by 1.
@@ -249,7 +259,7 @@ public class URLParser
                     // 1. If c is an ASCII alphanumeric, U+002B (+), U+002D (-), or U+002E (.), append c, lowercased, to buffer.
                     if (IsASCIIAlphaNumeric(c) || IsOneOf(c, CodePoint.Plus, CodePoint.HyphenMinus, CodePoint.Period))
                     {
-                        buffer += char.ToLower(c);
+                        buffer += char.ToLower((char)c);
                     }
                     // 2. Otherwise, if c is U+003A (:), then:
                     else if (c == (uint)CodePoint.Colon)
@@ -471,7 +481,7 @@ public class URLParser
                             state = State.Fragment;
                         }
                         // 4. Otherwise, if c is not the EOF code point:
-                        else
+                        else if (!IsEOF())
                         {
                             // 1. Set url’s query to null.
                             url.Query = null;
@@ -610,7 +620,8 @@ public class URLParser
                     // 2. Otherwise, if one of the following is true:
                     //      - c is the EOF code point, U+002F (/), U+003F (?), or U+0023 (#)
                     //      - url is special and c is U+005C (\)
-                    else if (IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number) || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
+                    else if (IsEOF() || IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number)
+                        || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
                     {
                         // 1. If atSignSeen is true and buffer is the empty string, host-missing validation error, return failure.
                         if (atSignSeen && buffer == string.Empty)
@@ -627,7 +638,7 @@ public class URLParser
                     // 3. Otherwise, append c to buffer.
                     else
                     {
-                        buffer += c;
+                        buffer += (char)c;
                     }
                     break;
                 }
@@ -672,7 +683,9 @@ public class URLParser
                     // 3. Otherwise, if one of the following is true:
                     //      - c is the EOF code point, U+002F (/), U+003F (?), or U+0023 (#)
                     //      - url is special and c is U+005C (\)
-                    else if (IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number) || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
+                    else if (IsEOF()
+                        || IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number)
+                        || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus)))
                     {
                         // then decrease pointer by 1, and then:
                         pointer--;
@@ -727,7 +740,7 @@ public class URLParser
                         }
                         
                         // 3. Append c to buffer.
-                        buffer += c;
+                        buffer += (char)c;
                     }
 
                     break;
@@ -737,13 +750,14 @@ public class URLParser
                     // 1. If c is an ASCII digit, append c to buffer.
                     if (IsASCIIDigit(c))
                     {
-                        buffer += c;
+                        buffer += (char)c;
                     }
                     // 2. Otherwise, if one of the following is true:
                     //      - c is the EOF code point, U+002F (/), U+003F (?), or U+0023 (#)
                     //      - url is special and c is U+005C (\)
                     //      - state override is given
-                    else if (IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number)
+                    else if (IsEOF()
+                        || IsOneOf(c, CodePoint.Solidus, CodePoint.QuestionMark, CodePoint.Number)
                         || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
                         || hasStateOverride)
                     {
@@ -910,7 +924,7 @@ public class URLParser
                 {
                     // 1. If c is the EOF code point, U+002F (/), U+005C (\), U+003F (?),
                     //    or U+0023 (#), then decrease pointer by 1 and then:
-                    if (IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus, CodePoint.QuestionMark, CodePoint.Number))
+                    if (IsEOF() || IsOneOf(c, CodePoint.Solidus, CodePoint.ReverseSolidus, CodePoint.QuestionMark, CodePoint.Number))
                     {
                         pointer--;
 
@@ -973,7 +987,7 @@ public class URLParser
                     // 2. Otherwise, append c to buffer.
                     else
                     {
-                        buffer += c;
+                        buffer += (char)c;
                     }
 
                     break;
@@ -1020,7 +1034,7 @@ public class URLParser
                         url.Path.Add(string.Empty);
                     }
                     // 4. Otherwise, if c is not the EOF code point:
-                    else
+                    else if (!IsEOF())
                     {
                         // 1. Set state to path state.
                         state = State.Path;
@@ -1039,7 +1053,8 @@ public class URLParser
                     //      - c is the EOF code point or U+002F (/)
                     //      - url is special and c is U+005C (\)
                     //      - state override is not given and c is U+003F (?) or U+0023 (#)
-                    if (IsOneOf(c, CodePoint.Solidus)
+                    if (IsEOF()
+                        || IsOneOf(c, CodePoint.Solidus)
                         || (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
                         || (!hasStateOverride && IsOneOf(c, CodePoint.QuestionMark, CodePoint.Number)))
                     {
@@ -1143,7 +1158,7 @@ public class URLParser
                     {
                         // 1. If c is not the EOF code point, not a URL code point,
                         //    and not U+0025 (%), invalid-URL-unit validation error.
-                        if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                        if (!IsEOF() && !IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
                         {
                             // FIXME
                             hasValidationError = true;
@@ -1160,7 +1175,10 @@ public class URLParser
 
                         // 3. If c is not the EOF code point, UTF-8 percent-encode c
                         //    using the C0 control percent-encode set and append the result to url’s path.
-                        url.Path.Add(UTF8PercentEncode(c, PercentEncodeSet.C0Control));
+                        if (!IsEOF())
+                        {
+                            url.Path.Add(UTF8PercentEncode(c, PercentEncodeSet.C0Control));
+                        }
                     }
 
                     break;
@@ -1179,7 +1197,7 @@ public class URLParser
                     // 2. If one of the following is true:
                     //      - state override is not given and c is U+0023 (#)
                     //      - c is the EOF code point
-                    if (!hasStateOverride && IsOneOf(c, CodePoint.Number))
+                    if ((!hasStateOverride && IsOneOf(c, CodePoint.Number)) || IsEOF())
                     {
                         // 1. Let queryPercentEncodeSet be the special-query percent-encode set
                         //    if url is special; otherwise the query percent-encode set.
@@ -1201,7 +1219,7 @@ public class URLParser
                         }
                     }
                     // 3. Otherwise, if c is not the EOF code point:
-                    else
+                    else if (!IsEOF())
                     {
                         // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
                         if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
@@ -1220,7 +1238,7 @@ public class URLParser
                         }
 
                         // 3. Append c to buffer.
-                        buffer += c;
+                        buffer += (char)c;
                     }
                     break;
                 }
@@ -1251,7 +1269,13 @@ public class URLParser
                     throw new Exception("Unreachable.");
             }
 
-            // TODO: Do we need this?
+            // If, after a run, pointer points to the EOF code point, go to the next step.
+            if (IsEOF())
+            {
+                break;
+            }
+
+            // Otherwise, increase pointer by 1 and continue with the state machine.
             pointer++;
         }
 
@@ -1261,6 +1285,11 @@ public class URLParser
         }
 
         return url;
+    }
+
+    private bool IsEOF()
+    {
+        return pointer >= input.Length;
     }
 
     // https://url.spec.whatwg.org/#shorten-a-urls-path
@@ -1473,7 +1502,7 @@ public class URLParser
         }
         else
         {
-            return string.Format("{0}", codePoint);
+            return string.Format("{0}", (char)codePoint);
         }
     }
 
@@ -1556,7 +1585,7 @@ public class URLParser
     }
 
     // https://url.spec.whatwg.org/#host-parsing
-    private static string ParseHost(string input, bool isOpaque = false)
+    private string ParseHost(string input, bool isOpaque = false)
     {
         // 1. If input starts with U+005B ([), then:
         if (input.StartsWith('['))
@@ -1595,7 +1624,7 @@ public class URLParser
     }
 
     // https://url.spec.whatwg.org/#concept-opaque-host-parser
-    private static string ParseOpaqueHost(string input)
+    private string ParseOpaqueHost(string input)
     {
         // 1. If input contains a forbidden host code point, host-invalid-code-point validation error, return failure.
         if (input.Any(IsForbiddenHostCodePoint))
@@ -1635,89 +1664,79 @@ public class URLParser
         return result.ToString();
     }
 
-    private static string ParseIPv6Address(string input)
+    private string ParseIPv6Address(string input)
     {
         throw new NotImplementedException("IPv6 address parsing is unsupported at the moment.");
     }
 
-    private static bool IsSpace(char c)
+    private static bool IsSpace(uint c)
     {
         return c == (uint)CodePoint.Space;
     }
 
-    private static bool IsC0Control(char c)
+    private static bool IsC0Control(uint c)
     {
         return c >= (uint)CodePoint.NullCharacter && c <= (uint)CodePoint.UnitSeparator;
     }
 
-    private static bool IsC0ControlOrSpace(char c)
+    private static bool IsC0ControlOrSpace(uint c)
     {
         return IsC0Control(c) || IsSpace(c);
     }
 
-    private static bool IsControl(char c)
-    {
-        return IsC0Control(c) || (c >= (uint)CodePoint.Delete && c <= (uint)CodePoint.ApplicationProgramCommand);
-    }
-
-    private static bool IsASCIITab(char c)
+    private static bool IsASCIITab(uint c)
     {
         return c == (uint)CodePoint.Tab;
     }
 
-    private static bool IsASCIINewLine(char c)
+    private static bool IsASCIINewLine(uint c)
     {
         return c == (uint)CodePoint.LineFeed || c == (uint)CodePoint.CarriageReturn;
     }
 
-    private static bool IsASCIITabOrNewLine(char c)
+    private static bool IsASCIITabOrNewLine(uint c)
     {
         return IsASCIITab(c) || IsASCIINewLine(c);
     }
 
-    private static bool IsASCIIDigit(char c)
+    private static bool IsASCIIDigit(uint c)
     {
         return c >= (uint)CodePoint.Zero && c <= (uint)CodePoint.Nine; 
     }
 
-    private static bool IsASCIIUpperHexDigit(char c)
+    private static bool IsASCIIUpperHexDigit(uint c)
     {
         return IsASCIIDigit(c) || (c >= (uint)CodePoint.UppercaseA && c <= (uint)CodePoint.UppercaseF); 
     }
 
-    private static bool IsASCIILowerHexDigit(char c)
+    private static bool IsASCIILowerHexDigit(uint c)
     {
         return IsASCIIDigit(c) || (c >= (uint)CodePoint.LowercaseA && c <= (uint)CodePoint.LowercaseF); 
     }
 
-    public static bool IsASCIIHexDigit(char c)
+    public static bool IsASCIIHexDigit(uint c)
     {
         return IsASCIIUpperHexDigit(c) || IsASCIILowerHexDigit(c);
     }
 
-    private static bool IsASCIIUpperAlpha(char c)
+    private static bool IsASCIIUpperAlpha(uint c)
     {
         return c >= (uint)CodePoint.UppercaseA && c <= (uint)CodePoint.UppercaseZ;
     }
 
-    private static bool IsASCIILowerAlpha(char c)
+    private static bool IsASCIILowerAlpha(uint c)
     {
         return c >= (uint)CodePoint.LowercaseA && c <= (uint)CodePoint.LowercaseZ;
     }
 
-    private static bool IsASCIIAlpha(char c)
+    private static bool IsASCIIAlpha(uint c)
     {
         return IsASCIIUpperAlpha(c) || IsASCIILowerAlpha(c);
     }
 
-    private static bool IsASCIIAlphaNumeric(char c)
+    private static bool IsASCIIAlphaNumeric(uint c)
     {
         return IsASCIIDigit(c) || IsASCIIAlpha(c);
-    }
-
-    private static bool IsOneOf(char c, params CodePoint[] codePoints)
-    {
-        return IsOneOf((uint)c, codePoints);
     }
 
     private static bool IsOneOf(uint c, params CodePoint[] codePoints)
@@ -1740,22 +1759,22 @@ public class URLParser
         return IsWindowsDriveLetter(s) && IsOneOf(s[1], CodePoint.Colon);
     }
 
-    private static bool IsLeadingSurrogate(char c)
+    private static bool IsLeadingSurrogate(uint c)
     {
         return c >= 0xD800 && c <= 0xDBFF;
     }
 
-    private static bool IsTrailingSurrogate(char c)
+    private static bool IsTrailingSurrogate(uint c)
     {
         return c >= 0xDC00 && c <= 0xDFFF;
     }
 
-    private static bool IsSurrogate(char c)
+    private static bool IsSurrogate(uint c)
     {
         return IsLeadingSurrogate(c) || IsTrailingSurrogate(c);
     }
 
-    private static bool IsNonCharacter(char c)
+    private static bool IsNonCharacter(uint c)
     {
         return (c >= 0xFDD0 && c <= 0xFDEF) || IsOneOf(c, [
             0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE,
@@ -1765,7 +1784,7 @@ public class URLParser
         ]);
     }
 
-    private static bool IsURLCodePoint(char c)
+    private static bool IsURLCodePoint(uint c)
     {
         return IsASCIIAlphaNumeric(c)
             || IsOneOf(c, CodePoint.ExclamationMark, CodePoint.DollarSign, CodePoint.Ampersand,
@@ -1777,7 +1796,7 @@ public class URLParser
             ||  (c >= 0x00A0 && c <= 0x10FFFD && !IsSurrogate(c) && !IsNonCharacter(c));
     }
 
-    private static bool IsForbiddenHostCodePoint(char c)
+    private bool IsForbiddenHostCodePoint(char c)
     {
         return IsOneOf(c,
             CodePoint.NullCharacter, CodePoint.Tab, CodePoint.LineFeed, CodePoint.CarriageReturn,
