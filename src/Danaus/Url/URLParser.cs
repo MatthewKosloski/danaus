@@ -620,7 +620,7 @@ public class URLParser
 
                         // 2. Decrease pointer by buffer’s code point length + 1, set buffer to the empty string,
                         // and set state to host state.
-                        pointer -= buffer[buffer.Length + 1];
+                        pointer -= buffer.Length + 1;
                         buffer = string.Empty;
                         state = State.Host;
                     }
