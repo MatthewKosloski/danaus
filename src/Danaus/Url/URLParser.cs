@@ -216,7 +216,6 @@ public class URLParser
 
         // 8. Let pointer be a pointer for input.
         var pointer = 0;
-        var remaining = input[(pointer + 1)..];
 
         // 9. Keep running the following state machine by switching on state. 
         //    If, after a run, pointer points to the EOF code point, go to the next step.
@@ -255,6 +254,8 @@ public class URLParser
                     // 2. Otherwise, if c is U+003A (:), then:
                     else if (c == (uint)CodePoint.Colon)
                     {
+                        var remaining = input[(pointer + 1)..];
+
                         // 1. If state override is given, then:
                         if (hasStateOverride)
                         {
@@ -388,6 +389,8 @@ public class URLParser
                 }
                 case State.SpecialRelativeOrAuthority:
                 {
+                    var remaining = input[(pointer + 1)..];
+
                     // 1. If c is U+002F (/) and remaining starts with U+002F (/), then
                     //    set state to special authority ignore slashes state and increase pointer by 1.
                     if (IsOneOf(c, CodePoint.Solidus) && remaining.StartsWith("/"))
@@ -520,6 +523,8 @@ public class URLParser
                 }
                 case State.SpecialAuthoritySlashes:
                 {
+                    var remaining = input[(pointer + 1)..];
+                    
                     // 1. If c is U+002F (/) and remaining starts with U+002F (/), then
                     //    set state to special authority ignore slashes state and increase pointer by 1.
                     if (IsOneOf(c, CodePoint.Solidus) && remaining.StartsWith("/"))
@@ -1107,6 +1112,7 @@ public class URLParser
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
                         //    invalid-URL-unit validation error.
+                        var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
                             // FIXME
@@ -1145,6 +1151,7 @@ public class URLParser
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
                         //    invalid-URL-unit validation error.
+                        var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
                             // FIXME
@@ -1205,6 +1212,7 @@ public class URLParser
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
                         //    invalid-URL-unit validation error.
+                        var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
                             // FIXME
@@ -1227,6 +1235,7 @@ public class URLParser
 
                     // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
                     //    invalid-URL-unit validation error.
+                    var remaining = input[(pointer + 1)..];
                     if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                     {
                         // FIXME
