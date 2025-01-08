@@ -1245,24 +1245,33 @@ public class URLParser
                 }
                 case State.Fragment:
                 {
-                    // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-                    if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                    if(!IsEOF())
                     {
-                        // FIXME
-                        hasValidationError = true;
+                        // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
+                        if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }
+
+                        // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
+                        //    invalid-URL-unit validation error.
+                        var remaining = input[(pointer + 1)..];
+                        if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                        {
+                            // FIXME
+                            hasValidationError = true;
+                        }   
+
+                        // 3. UTF-8 percent-encode c using the fragment percent-encode set and append the result to url’s fragment.
+                        // NOTE: percent-encode is done on EOF on the entire buffer.
+                        buffer += (char)c;
                     }
-
-                    // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
-                    //    invalid-URL-unit validation error.
-                    var remaining = input[(pointer + 1)..];
-                    if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
+                    else
                     {
-                        // FIXME
-                        hasValidationError = true;
-                    }   
-
-                    // 3. UTF-8 percent-encode c using the fragment percent-encode set and append the result to url’s fragment.
-                    url.Fragment += UTF8PercentEncode(c, PercentEncodeSet.Fragment);
+                        url.Fragment = PercentEncodeAfterEncoding(Encoding.UTF8, buffer, PercentEncodeSet.Fragment);
+                        buffer = string.Empty;
+                    }
 
                     break;
                 }
