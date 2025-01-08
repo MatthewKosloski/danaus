@@ -1548,6 +1548,34 @@ public class URLParser
         return builder.ToString();
     }
 
+    // https://url.spec.whatwg.org/#string-percent-encode-after-encoding
+    private static string PercentEncodeAfterEncoding(Encoding encoding, string input, PercentEncodeSet percentEncodeSet, bool spaceAsPlus = false)
+    {
+        var output = new StringBuilder();
+
+        foreach (char c in input)
+        {
+            if (spaceAsPlus && c == (uint)CodePoint.Space)
+            {
+                output.Append(CodePoint.Plus);
+                continue;
+            }
+
+            var isomorph = c;
+
+            if (!IsCodePointInPercentEncodeSet(isomorph, percentEncodeSet))
+            {
+                output.Append(isomorph);
+            }
+            else
+            {
+                output.Append(UTF8PercentEncode(isomorph, percentEncodeSet));
+            }
+        }
+
+        return output.ToString();
+    }
+
     private static uint ParseASCIIHexDigit(char c)
     {
         if (IsASCIIHexDigit(c))
