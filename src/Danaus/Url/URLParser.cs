@@ -1205,8 +1205,9 @@ public class URLParser
                             ? PercentEncodeSet.SpecialQuery
                             : PercentEncodeSet.Query;
 
-                        // FIXME: 2. Percent-encode after encoding, with encoding, buffer, and queryPercentEncodeSet,
+                        // 2. Percent-encode after encoding, with encoding, buffer, and queryPercentEncodeSet,
                         //    and append the result to url’s query.
+                        url.Query += PercentEncodeAfterEncoding(encoding, buffer, queryPercentEncodeSet);
 
                         // 3. Set buffer to the empty string.
                         buffer = string.Empty;
