@@ -97,22 +97,6 @@ public enum CodePoint
     Zero = 0x0030,
 }
 
-public class BasicParseFailure(string message)
-{
-    public string Message { get; } = message;
-}
-
-public class BasicParseResult(URL? url, BasicParseFailure? failure)
-{
-    public URL? Url { get; } = url;
-    public BasicParseFailure? Failure { get; } = failure;
-
-    public bool IsFailure()
-    {
-        return Failure != null;
-    }
-}
-
 public class URLParser
 {
     private const uint END_OF_FILE = 0xFFFFFFFF;
@@ -134,17 +118,17 @@ public class URLParser
     }
 
     // https://url.spec.whatwg.org/#url-parsing
-    public URL Parse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8)
+    public ParseResult Parse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8)
     {
         this.input = input;
         
-        // 1. Let url be the result of running the basic URL parser on input with base and encoding.
-        var url = BasicParse(input, baseUrl, encoding) ?? throw new Exception("Failed to parse");
+        // 1. Let result be the result of running the basic URL parser on input with base and encoding.
+        var result = BasicParse(input, baseUrl, encoding) ?? throw new Exception("Failed to parse");
 
         // 3. If url's scheme is not "blob", return url.
-        if (!url.HasBlobScheme())
+        if (!result.Url.HasBlobScheme())
         {
-            return url;
+            return result;
         }
 
         // 4. Set url's blob URL entry to the result of resolving the blob URL url, if that did not return failure, and null otherwise.
@@ -152,21 +136,23 @@ public class URLParser
 
         // 5. Return url.
         // TODO
-        return new URL();
+        return result;
     }
 
     // https://url.spec.whatwg.org/#concept-basic-url-parser
-    private URL? BasicParse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8, URL? url = null, State? stateOverride = null)
+    private ParseResult? BasicParse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8, URL? url = null, State? stateOverride = null)
     {
         var hasStateOverride = stateOverride is not null;
         var processedInput = input;
-        var hasValidationError = false;
+        ParseResult result;
+        ParseResult? failure = null;
 
         // 1. If url is not given:
         if (url == null)
         {
             // 1. Set url to a new URL.
             url = new URL();
+            result = new ParseResult(url);
             
             // 2. If input contains any leading or trailing C0 control or space, invalid-URL-unit validation error.
             var startIndex = 0;
@@ -176,7 +162,7 @@ public class URLParser
             {
                 if (IsC0ControlOrSpace(input[startIndex]))
                 {
-                    hasValidationError = true;
+                    result.AddError(ValidationError.InvalidURLUnit);
                     continue;
                 }
 
@@ -187,7 +173,7 @@ public class URLParser
             {
                 if (IsC0ControlOrSpace(input[endIndex]))
                 {
-                    hasValidationError = true;
+                    result.AddError(ValidationError.InvalidURLUnit);
                     continue;
                 }
 
@@ -197,6 +183,10 @@ public class URLParser
             // 3. Remove any leading and trailing C0 control or space from input.
             processedInput = input.Substring(startIndex, endIndex);
         }
+        else
+        {
+            result = new ParseResult(url);
+        }
 
         // 2. If input contains any ASCII tab or newline, invalid-URL-unit validation error.
         // 3. Remove all ASCII tab or newline from input.
@@ -204,7 +194,7 @@ public class URLParser
         {
             if (IsASCIITabOrNewLine(ch))
             {
-                hasValidationError = true;
+                result.AddError(ValidationError.InvalidURLUnit);
                 processedInput = processedInput.Replace((char)CodePoint.Tab, (char)CodePoint.NullCharacter)
                     .Replace((char)CodePoint.LineFeed, (char)CodePoint.NullCharacter)
                     .Replace((char)CodePoint.CarriageReturn, (char)CodePoint.NullCharacter);
@@ -252,7 +242,7 @@ public class URLParser
                     // 3. Otherwise, return failure.
                     else
                     {
-                        // TODO
+                        return failure;
                     }
                     break;
                 case State.Scheme:
@@ -274,19 +264,19 @@ public class URLParser
                             if (url.IsSpecial() && !SpecialScheme.IsSpecialScheme(buffer)
                                 || !url.IsSpecial() && SpecialScheme.IsSpecialScheme(buffer))
                             {
-                                return url;
+                                return result;
                             }
 
                             // 3. If url includes credentials or has a non-null port, and buffer is "file", then return.
                             if ((url.IncludesCredentials() || url.HasPort()) && buffer == "file")
                             {
-                                return url;
+                                return result;
                             }
 
                             // 4. If url’s scheme is "file" and its host is an empty host, then return.
                             if (url.HasFileScheme() && url.HasEmptyHost())
                             {
-                                return url;
+                                return result;
                             }
                         }
 
@@ -303,7 +293,7 @@ public class URLParser
                             }
 
                             // 2. Return.
-                            return url;
+                            return result;
                         }
 
                         // 4. Set buffer to the empty string.
@@ -315,7 +305,7 @@ public class URLParser
                             // 1. If remaining does not start with "//", special-scheme-missing-following-solidus validation error.
                             if(!remaining.StartsWith("//"))
                             {
-                                hasValidationError = true;
+                                result.AddError(ValidationError.SpecialSchemeMissingFollowingSolidus);
                             }
                             state = State.File;
                         }
@@ -359,7 +349,7 @@ public class URLParser
                     // 4. Otherwise, return failure.
                     else
                     {
-                        // TODO
+                        return failure;
                     }
 
                     break;
@@ -369,7 +359,8 @@ public class URLParser
                     //    missing-scheme-non-relative-URL validation error, return failure.
                     if (baseUrl is null || baseUrl is not null && baseUrl.HasOpaquePath() && !IsOneOf(c, CodePoint.Number))
                     {
-                        hasValidationError = true;
+                        result.AddError(ValidationError.MissingSchemeNonRelativeURL);
+                        return failure;
                     } 
                     // 2. Otherwise, if base has an opaque path and c is U+0023 (#), set url’s scheme to base’s scheme,
                     //    url’s path to base’s path, url’s query to base’s query, url’s fragment to the empty string,
@@ -412,7 +403,7 @@ public class URLParser
                     //    set state to relative state and decrease pointer by 1.
                     else
                     {
-                        hasValidationError = true;
+                        result.AddError(ValidationError.SpecialSchemeMissingFollowingSolidus);
                         state = State.Relative;
                         pointer--;
                     }
@@ -452,7 +443,7 @@ public class URLParser
                     //    invalid-reverse-solidus validation error, set state to relative slash state.
                     else if (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
                     {
-                        hasValidationError = true;
+                        result.AddError(ValidationError.InvalidReverseSolidus);
                         state = State.RelativeSlash;
                     }
                     // 5. Otherwise:
@@ -505,7 +496,7 @@ public class URLParser
                         // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
                         if (IsOneOf(c, CodePoint.ReverseSolidus))
                         {
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidReverseSolidus);
                         }
 
                         // 2. Set state to special authority ignore slashes state.
@@ -546,7 +537,7 @@ public class URLParser
                     //    set state to special authority ignore slashes state and decrease pointer by 1.
                     else
                     {
-                        hasValidationError = true;
+                        result.AddError(ValidationError.SpecialSchemeMissingFollowingSolidus);
                         state = State.SpecialAuthorityIgnoreSlashes;
                         pointer--;
                     }
@@ -565,7 +556,7 @@ public class URLParser
                     // 2. Otherwise, special-scheme-missing-following-solidus validation error.
                     else
                     {
-                        hasValidationError = true;
+                        result.AddError(ValidationError.SpecialSchemeMissingFollowingSolidus);
                     }
 
                     break;
@@ -576,7 +567,7 @@ public class URLParser
                     if (IsOneOf(c, CodePoint.CommercialAt))
                     {
                         // 1. Invalid-credentials validation error.
-                        hasValidationError = true;
+                        result.AddError(ValidationError.InvalidCredentials);
 
                         // 2. If atSignSeen is true, then prepend "%40" to buffer.
                         if (atSignSeen)
@@ -626,7 +617,8 @@ public class URLParser
                         // 1. If atSignSeen is true and buffer is the empty string, host-missing validation error, return failure.
                         if (atSignSeen && buffer == string.Empty)
                         {
-                            hasValidationError = true;
+                            result.AddError(ValidationError.HostMissing);
+                            return failure;
                         }
 
                         // 2. Decrease pointer by buffer’s code point length + 1, set buffer to the empty string,
@@ -657,13 +649,14 @@ public class URLParser
                         // 1. If buffer is the empty string, host-missing validation error, return failure.
                         if (buffer == string.Empty)
                         {
-                            hasValidationError = true;
+                            result.AddError(ValidationError.HostMissing);
+                            return failure;
                         }
                         
                         // 2. If state override is given and state override is hostname state, then return.
                         if (hasStateOverride && stateOverride == State.Hostname)
                         {
-                            return url;
+                            return result;
                         }
                         
                         // 3. Let host be the result of host parsing buffer with url is not special.
@@ -672,7 +665,7 @@ public class URLParser
                         // FIXME: 4. If host is failure, then return failure.
                         if (host == string.Empty)
                         {
-                            
+                            return failure;
                         } 
 
                         // 5. Set url’s host to host, buffer to the empty string, and state to port state.
@@ -694,14 +687,14 @@ public class URLParser
                         //    host-missing validation error, return failure.
                         if (url.IsSpecial() && buffer == string.Empty)
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.HostMissing);
+                            return failure;
                         }
                         // 2. Otherwise, if state override is given, buffer is the empty string, 
                         //    and either url includes credentials or url’s port is non-null, return.
                         else if (hasStateOverride && buffer == string.Empty && (url.IncludesCredentials() || url.Port is not null))
                         {
-                            return url;
+                            return result;
                         }
 
                         // 3. Let host be the result of host parsing buffer with url is not special.
@@ -710,7 +703,7 @@ public class URLParser
                         // FIXME: 4. If host is failure, then return failure.
                         if (host == string.Empty)
                         {
-                            
+                            return failure;
                         } 
 
                         // 5. Set url’s host to host, buffer to the empty string, and state to path start state.
@@ -721,7 +714,7 @@ public class URLParser
                         // 6. If state override is given, then return.
                         if (hasStateOverride)
                         {
-                            return url;
+                            return result;
                         }
                     }
                     // Otherwise:
@@ -772,8 +765,8 @@ public class URLParser
                             var isU16 = port >= ushort.MinValue && port <= ushort.MaxValue;
                             if (!isU16)
                             {
-                                // FIXME
-                                hasValidationError = true;
+                                result.AddError(ValidationError.PortOutOfRange);
+                                return failure;
                             }
 
                             // 3. Set url’s port to null, if port is url’s scheme’s default port;
@@ -789,7 +782,7 @@ public class URLParser
                         // 2. If state override is given, then return.
                         if (hasStateOverride)
                         {
-                            return url;
+                            return result;
                         }
 
                         // 3. Set state to path start state and decrease pointer by 1.
@@ -799,8 +792,8 @@ public class URLParser
                     // 3. Otherwise, port-invalid validation error, return failure.
                     else
                     {
-                        // FIXME
-                        hasValidationError = true;
+                        result.AddError(ValidationError.PortInvalid);
+                        return failure;
                     }
 
                     break;
@@ -818,8 +811,7 @@ public class URLParser
                         // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
                         if (IsOneOf(c, CodePoint.ReverseSolidus))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidReverseSolidus);
                         }
 
                         // 2. Set state to file slash state.
@@ -862,8 +854,7 @@ public class URLParser
                             else
                             {
                                 // 1. File-invalid-Windows-drive-letter validation error.
-                                // FIXME
-                                hasValidationError = true;
+                                result.AddError(ValidationError.FileInvalidWindowsDriveLetter);
                                 url.Path = [" "];
                             }
 
@@ -888,8 +879,7 @@ public class URLParser
                         // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
                         if (IsOneOf(c, CodePoint.ReverseSolidus))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidReverseSolidus);
                         }
 
                         // 2. Set state to file host state.
@@ -932,8 +922,7 @@ public class URLParser
                         //    file-invalid-Windows-drive-letter-host validation error, set state to path state.
                         if (!hasStateOverride && IsWindowsDriveLetter(buffer))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.FileInvalidWindowsDriveLetterHost);
                             state = State.Path;
                         }
                         // 2. Otherwise, if buffer is the empty string, then:
@@ -945,7 +934,7 @@ public class URLParser
                             // 2. If state override is given, then return.
                             if (hasStateOverride)
                             {
-                                return url;
+                                return result;
                             }
 
                             // 3. Set state to path start state.
@@ -961,7 +950,7 @@ public class URLParser
                             // 2. If host is failure, then return failure.
                             if (host == string.Empty)
                             {
-
+                                return failure;
                             }
 
                             // 3. If host is "localhost", then set host to the empty string.
@@ -976,7 +965,7 @@ public class URLParser
                             // 5. If state override is given, then return.
                             if (hasStateOverride)
                             {
-                                return url;
+                                return result;
                             }
 
                             // 6. Set buffer to the empty string and state to path start state.
@@ -1000,8 +989,7 @@ public class URLParser
                         // 1. If c is U+005C (\), invalid-reverse-solidus validation error.
                         if (IsOneOf(c, CodePoint.ReverseSolidus))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidReverseSolidus);
                         }
 
                         // 2. Set state to path state.
@@ -1061,8 +1049,7 @@ public class URLParser
                         // 1. If url is special and c is U+005C (\), invalid-reverse-solidus validation error.
                         if (url.IsSpecial() && IsOneOf(c, CodePoint.ReverseSolidus))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidReverseSolidus);
                         }
 
                         // 2. If buffer is a double-dot URL path segment, then:
@@ -1121,8 +1108,7 @@ public class URLParser
                         // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
                         if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
@@ -1131,7 +1117,7 @@ public class URLParser
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
                             // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
                         
                         // 3. UTF-8 percent-encode c using the path percent-encode set and append the result to buffer.
@@ -1160,8 +1146,7 @@ public class URLParser
                         //    and not U+0025 (%), invalid-URL-unit validation error.
                         if (!IsEOF() && !IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
@@ -1169,8 +1154,7 @@ public class URLParser
                         var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 3. If c is not the EOF code point, UTF-8 percent-encode c
@@ -1225,8 +1209,7 @@ public class URLParser
                         // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
                         if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
@@ -1234,8 +1217,7 @@ public class URLParser
                         var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 3. Append c to buffer.
@@ -1250,8 +1232,7 @@ public class URLParser
                         // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
                         if (!IsURLCodePoint(c) && !IsOneOf(c, CodePoint.PercentSign))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }
 
                         // 2. If c is U+0025 (%) and remaining does not start with two ASCII hex digits,
@@ -1259,8 +1240,7 @@ public class URLParser
                         var remaining = input[(pointer + 1)..];
                         if (IsOneOf(c, CodePoint.PercentSign) && !StartsWithTwoASCIIHexDigits(remaining))
                         {
-                            // FIXME
-                            hasValidationError = true;
+                            result.AddError(ValidationError.InvalidURLUnit);
                         }   
 
                         // 3. UTF-8 percent-encode c using the fragment percent-encode set and append the result to url’s fragment.
@@ -1289,17 +1269,7 @@ public class URLParser
             pointer++;
         }
 
-        if (hasValidationError)
-        {
-            return null;
-        }
-
-        return url;
-    }
-
-    private bool IsEOF()
-    {
-        return pointer >= input.Length;
+        return result;
     }
 
     // https://url.spec.whatwg.org/#shorten-a-urls-path
@@ -1710,6 +1680,11 @@ public class URLParser
     private static bool IsSpace(uint c)
     {
         return c == (uint)CodePoint.Space;
+    }
+
+    private bool IsEOF()
+    {
+        return pointer >= input.Length;
     }
 
     private static bool IsC0Control(uint c)
