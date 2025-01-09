@@ -51,3 +51,111 @@ public enum CodePoint
     VerticalLine = 0x007C,
     Zero = 0x0030,
 }
+
+public static class CodePointExtension
+{
+    public static bool IsSpace(this uint codePoint)
+    {
+        return codePoint == (uint)CodePoint.Space;
+    }
+
+    public static bool IsC0Control(this uint codePoint)
+    {
+        return codePoint >= (uint)CodePoint.NullCharacter && codePoint <= (uint)CodePoint.UnitSeparator;
+    }
+
+    public static bool IsC0ControlOrSpace(this uint codePoint)
+    {
+        return IsC0Control(codePoint) || IsSpace(codePoint);
+    }
+
+    public static bool IsASCIITab(this uint codePoint)
+    {
+        return codePoint == (uint)CodePoint.Tab;
+    }
+
+    public static bool IsASCIINewLine(this uint codePoint)
+    {
+        return codePoint == (uint)CodePoint.LineFeed || codePoint == (uint)CodePoint.CarriageReturn;
+    }
+
+    public static bool IsASCIITabOrNewLine(this uint codePoint)
+    {
+        return IsASCIITab(codePoint) || IsASCIINewLine(codePoint);
+    }
+
+    public static bool IsASCIIDigit(this uint codePoint)
+    {
+        return codePoint >= (uint)CodePoint.Zero && codePoint <= (uint)CodePoint.Nine; 
+    }
+
+    public static bool IsASCIIUpperHexDigit(this uint codePoint)
+    {
+        return IsASCIIDigit(codePoint) || (codePoint >= (uint)CodePoint.UppercaseA && codePoint <= (uint)CodePoint.UppercaseF); 
+    }
+
+    public static bool IsASCIILowerHexDigit(this uint codePoint)
+    {
+        return IsASCIIDigit(codePoint) || (codePoint >= (uint)CodePoint.LowercaseA && codePoint <= (uint)CodePoint.LowercaseF); 
+    }
+
+    public static bool IsASCIIHexDigit(this uint codePoint)
+    {
+        return IsASCIIUpperHexDigit(codePoint) || IsASCIILowerHexDigit(codePoint);
+    }
+
+    public static bool IsASCIIUpperAlpha(this uint codePoint)
+    {
+        return codePoint >= (uint)CodePoint.UppercaseA && codePoint <= (uint)CodePoint.UppercaseZ;
+    }
+
+    public static bool IsASCIILowerAlpha(this uint codePoint)
+    {
+        return codePoint >= (uint)CodePoint.LowercaseA && codePoint <= (uint)CodePoint.LowercaseZ;
+    }
+
+    public static bool IsASCIIAlpha(this uint codePoint)
+    {
+        return IsASCIIUpperAlpha(codePoint) || IsASCIILowerAlpha(codePoint);
+    }
+
+    public static bool IsASCIIAlphaNumeric(this uint codePoint)
+    {
+        return IsASCIIDigit(codePoint) || IsASCIIAlpha(codePoint);
+    }
+
+    public static bool IsOneOf(this uint codePoint, params CodePoint[] codePoints)
+    {
+        return IsOneOf(codePoint, codePoints.Select((codePoint) => (uint)codePoint));
+    }
+
+    public static bool IsOneOf(this uint codePoint, IEnumerable<uint> codePoints)
+    {
+        return codePoints.Any(c => c == codePoint);
+    }
+
+    public static bool IsLeadingSurrogate(this uint codePoint)
+    {
+        return codePoint >= 0xD800 && codePoint <= 0xDBFF;
+    }
+
+    public static bool IsTrailingSurrogate(this uint codePoint)
+    {
+        return codePoint >= 0xDC00 && codePoint <= 0xDFFF;
+    }
+
+    public static bool IsSurrogate(this uint codePoint)
+    {
+        return IsLeadingSurrogate(codePoint) || IsTrailingSurrogate(codePoint);
+    }
+
+    public static bool IsNonCharacter(this uint codePoint)
+    {
+        return (codePoint >= 0xFDD0 && codePoint <= 0xFDEF) || IsOneOf(codePoint, [
+            0xFFFE, 0xFFFF, 0x1FFFE, 0x1FFFF, 0x2FFFE, 0x2FFFF, 0x3FFFE, 0x3FFFF, 0x4FFFE,
+            0x4FFFF, 0x5FFFE, 0x5FFFF, 0x6FFFE, 0x6FFFF, 0x7FFFE, 0x7FFFF, 0x8FFFE, 0x8FFFF,
+            0x9FFFE, 0x9FFFF, 0xAFFFE, 0xAFFFF, 0xBFFFE, 0xBFFFF, 0xCFFFE, 0xCFFFF, 0xDFFFE,
+            0xDFFFF, 0xEFFFE, 0xEFFFF, 0xFFFFE, 0xFFFFF, 0x10FFFE, 0x10FFFF
+        ]);
+    }
+}
