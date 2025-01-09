@@ -5,14 +5,14 @@ namespace Danaus.Url;
 
 public enum PercentEncodeSet
 {
+    ApplicationXWWWFormUrlEncoded,
     C0Control,
+    Component,
     Fragment,
+    Path,
     Query,
     SpecialQuery,
-    Path,
     Userinfo,
-    Component,
-    ApplicationXWWWFormUrlEncoded
 }
 
 public enum State
