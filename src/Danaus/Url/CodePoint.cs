@@ -158,4 +158,25 @@ public static class CodePointExtension
             0xDFFFF, 0xEFFFE, 0xEFFFF, 0xFFFFE, 0xFFFFF, 0x10FFFE, 0x10FFFF
         ]);
     }
+
+    public static bool IsURLCodePoint(this uint codePoint)
+    {
+        return codePoint.IsASCIIAlphaNumeric()
+            || codePoint.IsOneOf(CodePoint.ExclamationMark, CodePoint.DollarSign, CodePoint.Ampersand,
+                CodePoint.Apostrophe, CodePoint.LeftParenthesis, CodePoint.RightParenthesis,
+                CodePoint.Asterisk, CodePoint.Plus, CodePoint.Comma, CodePoint.HyphenMinus,
+                CodePoint.Period, CodePoint.Solidus, CodePoint.Colon, CodePoint.Semicolon,
+                CodePoint.EqualsSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LowLine,
+                CodePoint.Tilde)
+            ||  (codePoint >= 0x00A0 && codePoint <= 0x10FFFD && !codePoint.IsSurrogate() && !codePoint.IsNonCharacter());
+    }
+
+    public static bool IsForbiddenHostCodePoint(this uint codePoint)
+    {
+        return codePoint.IsOneOf(
+            CodePoint.NullCharacter, CodePoint.Tab, CodePoint.LineFeed, CodePoint.CarriageReturn,
+            CodePoint.Space, CodePoint.Number, CodePoint.Solidus, CodePoint.Colon, CodePoint.LessThanSign,
+            CodePoint.GreaterThanSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LeftSquareBracket,
+            CodePoint.ReverseSolidus, CodePoint.RightSquareBracket, CodePoint.CircumflexAccent, CodePoint.VerticalLine);
+    }
 }

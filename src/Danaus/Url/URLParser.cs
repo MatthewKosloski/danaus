@@ -1102,7 +1102,7 @@ public class URLParser
         else
         {
             // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-            if (!IsURLCodePoint(c) && !c.IsOneOf(CodePoint.PercentSign))
+            if (!c.IsURLCodePoint() && !c.IsOneOf(CodePoint.PercentSign))
             {
                 result.AddError(ValidationError.InvalidURLUnit);
             }
@@ -1143,7 +1143,7 @@ public class URLParser
         {
             // 1. If c is not the EOF code point, not a URL code point,
             //    and not U+0025 (%), invalid-URL-unit validation error.
-            if (!context.IsEOF() && !IsURLCodePoint(c) && !c.IsOneOf(CodePoint.PercentSign))
+            if (!context.IsEOF() && !c.IsURLCodePoint() && !c.IsOneOf(CodePoint.PercentSign))
             {
                 result.AddError(ValidationError.InvalidURLUnit);
             }
@@ -1208,7 +1208,7 @@ public class URLParser
         else if (!context.IsEOF())
         {
             // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-            if (!IsURLCodePoint(c) && !c.IsOneOf(CodePoint.PercentSign))
+            if (!c.IsURLCodePoint() && !c.IsOneOf(CodePoint.PercentSign))
             {
                 result.AddError(ValidationError.InvalidURLUnit);
             }
@@ -1234,7 +1234,7 @@ public class URLParser
         if(!context.IsEOF())
         {
             // 1. If c is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-            if (!IsURLCodePoint(c) && !c.IsOneOf(CodePoint.PercentSign))
+            if (!c.IsURLCodePoint() && !c.IsOneOf(CodePoint.PercentSign))
             {
                 result.AddError(ValidationError.InvalidURLUnit);
             }
@@ -1348,14 +1348,14 @@ public class URLParser
     private static string ParseOpaqueHost(string input)
     {
         // 1. If input contains a forbidden host code point, host-invalid-code-point validation error, return failure.
-        if (input.Any(IsForbiddenHostCodePoint))
+        if (input.Any(c => ((uint)c).IsForbiddenHostCodePoint()))
         {
             // FIXME
             return string.Empty;
         }
 
         // 2. If input contains a code point that is not a URL code point and not U+0025 (%), invalid-URL-unit validation error.
-        if (input.Any((c) => !(IsURLCodePoint(c) || ((uint)c).IsOneOf(CodePoint.PercentSign))))
+        if (input.Any((c) => !(((uint)c).IsURLCodePoint() || ((uint)c).IsOneOf(CodePoint.PercentSign))))
         {
             // FIXME
             return string.Empty;
@@ -1401,27 +1401,6 @@ public class URLParser
     private static bool IsNormalizedWindowsDriveLetter(string s)
     {
         return IsWindowsDriveLetter(s) && ((uint)s[1]).IsOneOf(CodePoint.Colon);
-    }
-
-    private static bool IsURLCodePoint(uint c)
-    {
-        return c.IsASCIIAlphaNumeric()
-            || c.IsOneOf(CodePoint.ExclamationMark, CodePoint.DollarSign, CodePoint.Ampersand,
-                CodePoint.Apostrophe, CodePoint.LeftParenthesis, CodePoint.RightParenthesis,
-                CodePoint.Asterisk, CodePoint.Plus, CodePoint.Comma, CodePoint.HyphenMinus,
-                CodePoint.Period, CodePoint.Solidus, CodePoint.Colon, CodePoint.Semicolon,
-                CodePoint.EqualsSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LowLine,
-                CodePoint.Tilde)
-            ||  (c >= 0x00A0 && c <= 0x10FFFD && !c.IsSurrogate() && !c.IsNonCharacter());
-    }
-
-    private static bool IsForbiddenHostCodePoint(char c)
-    {
-        return ((uint)c).IsOneOf(
-            CodePoint.NullCharacter, CodePoint.Tab, CodePoint.LineFeed, CodePoint.CarriageReturn,
-            CodePoint.Space, CodePoint.Number, CodePoint.Solidus, CodePoint.Colon, CodePoint.LessThanSign,
-            CodePoint.GreaterThanSign, CodePoint.QuestionMark, CodePoint.CommercialAt, CodePoint.LeftSquareBracket,
-            CodePoint.ReverseSolidus, CodePoint.RightSquareBracket, CodePoint.CircumflexAccent, CodePoint.VerticalLine);
     }
 
     private static bool IsSingleDotURLPathSegment(string input)
