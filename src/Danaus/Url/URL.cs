@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Danaus.Url;
 
 // https://url.spec.whatwg.org/#concept-url
