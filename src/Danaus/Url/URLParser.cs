@@ -168,6 +168,9 @@ public class URLParser
             context.GoToNextCodePoint();
         }
 
+        // Remove any empty segments from the path collection.
+        context.Result.Url.Path.RemoveAll((segment) => segment == string.Empty);
+
         return context.Result;
     }
 
@@ -188,7 +191,7 @@ public class URLParser
         // 3. Otherwise, return failure.
         else
         {
-            throw new URLParseFailureException();
+            return context.Result;
         }
 
         return null;
@@ -299,7 +302,7 @@ public class URLParser
         // 4. Otherwise, return failure.
         else
         {
-            throw new URLParseFailureException();
+            return context.Result;
         }
 
         return null;
@@ -590,7 +593,7 @@ public class URLParser
             if (context.AtSignSeen && context.Buffer == string.Empty)
             {
                 result.AddError(ValidationError.HostMissing);
-                throw new URLParseFailureException();
+                return context.Result;
             }
 
             // 2. Decrease pointer by buffer’s code point length + 1, set buffer to the empty string,
@@ -625,7 +628,7 @@ public class URLParser
             if (context.Buffer == string.Empty)
             {
                 result.AddError(ValidationError.HostMissing);
-                throw new URLParseFailureException();
+                return context.Result;
             }
             
             // 2. If state override is given and state override is hostname state, then return.
@@ -640,7 +643,7 @@ public class URLParser
             // FIXME: 4. If host is failure, then return failure.
             if (host == string.Empty)
             {
-                throw new URLParseFailureException();
+                return context.Result;
             } 
 
             // 5. Set url’s host to host, buffer to the empty string, and state to port state.
@@ -663,7 +666,7 @@ public class URLParser
             if (url.IsSpecial() && context.Buffer == string.Empty)
             {
                 result.AddError(ValidationError.HostMissing);
-                throw new URLParseFailureException();
+                return context.Result;
             }
             // 2. Otherwise, if state override is given, buffer is the empty string, 
             //    and either url includes credentials or url’s port is non-null, return.
@@ -678,7 +681,7 @@ public class URLParser
             // FIXME: 4. If host is failure, then return failure.
             if (host == string.Empty)
             {
-                throw new URLParseFailureException();
+                return context.Result;
             } 
 
             // 5. Set url’s host to host, buffer to the empty string, and state to path start state.
@@ -744,7 +747,7 @@ public class URLParser
                 if (!isU16)
                 {
                     result.AddError(ValidationError.PortOutOfRange);
-                    throw new URLParseFailureException();
+                    return context.Result;
                 }
 
                 // 3. Set url’s port to null, if port is url’s scheme’s default port;
@@ -771,7 +774,7 @@ public class URLParser
         else
         {
             result.AddError(ValidationError.PortInvalid);
-            throw new URLParseFailureException();
+            return context.Result;
         }
 
         return null;
@@ -939,7 +942,7 @@ public class URLParser
                 // 2. If host is failure, then return failure.
                 if (host == string.Empty)
                 {
-                    throw new URLParseFailureException();
+                    return context.Result;
                 }
 
                 // 3. If host is "localhost", then set host to the empty string.

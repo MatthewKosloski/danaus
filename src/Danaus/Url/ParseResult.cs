@@ -17,4 +17,23 @@ public class ParseResult(URL url, List<ValidationError>? validationErrors = null
     {
         return ValidationErrors is not null;
     }
+
+    public override bool Equals(Object? other)
+    {
+        if (other == null || !(other is ParseResult))
+        {
+            return false;
+        }
+        else
+        {
+            var otherParseResult = (ParseResult)other;
+            return otherParseResult.Url.Equals(Url) && otherParseResult.ValidationErrors.SequenceEqual(ValidationErrors);
+        }
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Url.GetHashCode(), ValidationErrors.GetHashCode());
+    }
+
 }

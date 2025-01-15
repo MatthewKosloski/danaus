@@ -31,7 +31,7 @@ public class URL(
     public string Password { get; set; } = password;
     public string? Host { get; set; } = host;
     public ushort? Port { get; set; } = port;
-    public IList<string> Path { get; set; } = path ?? [];
+    public List<string> Path { get; set; } = path ?? [];
     public string? Query { get; set; } = query;
     public string? Fragment { get; set; } = fragment;
 
@@ -387,4 +387,31 @@ public class URL(
     {
         return Username != string.Empty || Password != string.Empty;
     }
+
+    public override bool Equals(Object? other)
+    {
+        if (other == null || !(other is URL))
+        {
+            return false;
+        }
+        else
+        {
+            var otherURL = (URL)other;
+            return otherURL.Scheme == Scheme
+                && otherURL.Username == Username
+                && otherURL.Password == Password
+                && otherURL.Host == Host
+                && otherURL.Port == Port
+                && otherURL.Path.SequenceEqual(Path)
+                && otherURL.Query == Query
+                && otherURL.Fragment == Fragment;
+        }
+    }
+
+    public override int GetHashCode()
+    {
+        return HashCode.Combine(Scheme.GetHashCode(), Username.GetHashCode(), Password.GetHashCode(),
+            Host?.GetHashCode(), Port.GetHashCode(), Path.GetHashCode(), Query?.GetHashCode(), Fragment?.GetHashCode());
+    }
+
 }
