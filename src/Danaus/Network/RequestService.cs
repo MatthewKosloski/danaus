@@ -74,14 +74,12 @@ public class RequestService
         // Buffer the response into a linked list.
         Chunk? chunk = null;
         int hasBytes = 1;
-        int chunkCount = 0;
         int chunkSize = 256;
         while (hasBytes != 0)
         {
             var chunkData = new byte[chunkSize];
             hasBytes = await socket.ReceiveAsync(chunkData, SocketFlags.None);
             chunk = new Chunk(chunkData, chunk, null);
-            chunkCount++;
         }
 
         // Reverse the linked list such that chunk points to the first node.
