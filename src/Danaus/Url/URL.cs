@@ -43,6 +43,25 @@ public class URL(
         }
     }
 
+    public ushort PortOrSpecialSchemePortOr80
+    {
+        get
+        {
+            if (Port is not null)
+            {
+                return (ushort)Port;
+            }
+            else if (SpecialScheme is not null && SpecialScheme?.Port is not null)
+            {
+                return (ushort)SpecialScheme.Port;
+            }
+            else
+            {
+                return 80;
+            }
+        }
+    }
+
     // https://url.spec.whatwg.org/#userinfo-percent-encode-set
     private static bool IsCodePointInPercentEncodeSet(uint codePoint, PercentEncodeSet set)
     {
