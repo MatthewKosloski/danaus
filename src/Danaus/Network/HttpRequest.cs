@@ -21,7 +21,7 @@ public class HttpRequest(URL url, HttpMethod method, Dictionary<HttpRequestHeade
         builder.Append($"{Method.Name} {(Url.Path.Count != 0 ? string.Join('/', Url.Path) : "/")} HTTP/1.0\r\n");
         foreach (KeyValuePair<HttpRequestHeader, string> kvp in Headers)
         {
-            builder.Append($"{kvp.Key.Name} {kvp.Value}\r\n");
+            builder.Append($"{kvp.Key.Name}: {kvp.Value}\r\n");
         }
         builder.Append("\r\n");
 
