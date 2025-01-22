@@ -6,7 +6,7 @@ public class SpecialScheme
 
     public string Scheme { get; }
 
-    public int? Port { get; }
+    public ushort? Port { get; }
 
     public static SpecialScheme Ftp
     {
@@ -38,7 +38,7 @@ public class SpecialScheme
         get { return new SpecialScheme("ws", 443); }
     }
 
-    private SpecialScheme(string scheme, int? port)
+    private SpecialScheme(string scheme, ushort? port)
     {
         Scheme = scheme;
         Port = port;
