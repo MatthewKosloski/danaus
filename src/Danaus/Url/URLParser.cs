@@ -1,3 +1,4 @@
+using Danaus.Core;
 using System.Diagnostics;
 using System.Text;
 
@@ -33,8 +34,12 @@ public class URLParser
     private const uint END_OF_FILE = 0xFFFFFFFF;
 
     // https://url.spec.whatwg.org/#url-parsing
-    public static ParseResult Parse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8)
+    public static ParseResult Parse(string input, URL? baseUrl = null, Encoding? encoding = null)
     {
+        if (encoding == null)
+        {
+            encoding = Encoding.UTF8;
+        }
         // 1. Let result be the result of running the basic URL parser on input with base and encoding.
         var result = BasicParse(input, baseUrl, encoding) ?? throw new Exception("Failed to parse");
 
@@ -54,8 +59,10 @@ public class URLParser
     }
 
     // https://url.spec.whatwg.org/#concept-basic-url-parser
-    private static ParseResult? BasicParse(string input, URL? baseUrl = null, Encoding encoding = Encoding.UTF8, URL? url = null, State? stateOverride = null)
+    private static ParseResult? BasicParse(string input, URL? baseUrl = null, Encoding? encoding = null, URL? url = null, State? stateOverride = null)
     {
+        encoding ??= Encoding.UTF8;
+
         var processedInput = input;
         ParseResult result;
 

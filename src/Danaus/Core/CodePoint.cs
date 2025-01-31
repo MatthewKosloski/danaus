@@ -1,4 +1,4 @@
-namespace Danaus.Url;
+namespace Danaus.Core;
 
 public enum CodePoint
 {
