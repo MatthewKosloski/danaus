@@ -6,29 +6,21 @@ namespace Danaus.Network;
 
 public class RequestService
 {
-    public static async Task<HttpResponse?> GetResponse(HttpRequest request)
+    public static async Task<HttpResponse> GetResponse(HttpRequest request)
     {
-        Chunk? chunk = await GetChunkedResponse(request);
-
-        // Encode the chunked byte data into a UTF8 string.
-        var builder = new StringBuilder();
-        while (chunk?.Next != null)
-        {
-            builder.Append(Encoding.UTF8.GetString(chunk.Data));
-            chunk = chunk.Next;
-        }
-
-        StringReader reader = new(builder.ToString());
+        // The caller is responsible for disposing this resource.
+        MemoryStream memoryStream = await GetResponseAsMemoryStream(request);
+        StreamReader streamReader = new(memoryStream, Encoding.UTF8);
 
         // Parse the status line.
-        string? line = await reader.ReadLineAsync();
+        string? line = await streamReader.ReadLineAsync();
         var statusPieces = line?.Split(" ");
 
         // Parse the response headers.
         Dictionary<HttpResponseHeader, string> headers = new();
         do
         {
-            line = await reader.ReadLineAsync();
+            line = await streamReader.ReadLineAsync();
             if (line != null)
             {
                 var parts = line.Split(":");
@@ -40,9 +32,6 @@ public class RequestService
             }
         } while (line != string.Empty);
 
-        // The rest of string contains the HTML document.
-        var content = await reader.ReadToEndAsync();
-
         return new HttpResponse(
             url: request.Url,
             method: request.Method,
@@ -50,17 +39,19 @@ public class RequestService
             httpVersion: statusPieces?[0] ?? string.Empty,
             httpStatusText: statusPieces?[2] ?? string.Empty,
             httpStatusCode: ushort.Parse(statusPieces?[1] ?? string.Empty),
-            content: content
+            content: streamReader
         );
     }
 
-    public static async Task<Chunk?> GetChunkedResponse(HttpRequest request)
+    private static async Task<MemoryStream> GetResponseAsMemoryStream(HttpRequest request)
     {
+        MemoryStream memoryStream = new();
+    
         Socket? socket = await GetSocket(request);
 
         if (socket is null)
         {
-            return null;
+            return memoryStream;
         }
 
         var requestBytes = request.GetBytes();
@@ -71,26 +62,18 @@ public class RequestService
             bytesSent += await socket.SendAsync(requestBytes.AsMemory(bytesSent), SocketFlags.None);
         }
 
-        // Buffer the response into a linked list.
-        Chunk? chunk = null;
         int hasBytes = 1;
         int chunkSize = 256;
         while (hasBytes != 0)
         {
             var chunkData = new byte[chunkSize];
             hasBytes = await socket.ReceiveAsync(chunkData, SocketFlags.None);
-            chunk = new Chunk(chunkData, chunk, null);
+            await memoryStream.WriteAsync(chunkData);
         }
 
-        // Reverse the linked list such that chunk points to the first node.
-        while (chunk?.Previous != null)
-        {
-            Chunk temp = chunk;
-            chunk = chunk.Previous;
-            chunk.Next = temp;
-        }
+        memoryStream.Position = 0;
 
-        return chunk;
+        return memoryStream;
     }
 
     private static async Task<Socket?> GetSocket(HttpRequest request)

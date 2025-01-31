@@ -3,9 +3,14 @@ using Danaus.Url;
 
 namespace Danaus.Network;
 
-public class HttpResponse(URL url, HttpMethod method,
-Dictionary<HttpResponseHeader, string> headers, string httpVersion,
- string httpStatusText, ushort httpStatusCode, string content)
+public class HttpResponse(
+    URL url,
+    HttpMethod method,
+    Dictionary<HttpResponseHeader, string> headers,
+    string httpVersion,
+    string httpStatusText,
+    ushort httpStatusCode,
+    StreamReader content)
 {
     public URL Url { get; set; } = url;
     public HttpMethod Method { get; set; } = method;
@@ -13,7 +18,7 @@ Dictionary<HttpResponseHeader, string> headers, string httpVersion,
     public string HttpVersion { get; set; } = httpVersion;
     public string HttpStatusText { get; set; } = httpStatusText;
     public ushort HttpStatusCode { get; set; } = httpStatusCode;
-    public string Content { get; set; } = content;
+    public StreamReader Content { get; set; } = content;
 
     public byte[] GetBytes()
     {
