@@ -134,6 +134,11 @@ public static class CodePointExtension
         return codePoints.Any(c => c == codePoint);
     }
 
+    public static bool Is(this uint codePoint, CodePoint cp)
+    {
+        return IsOneOf(codePoint, cp);
+    }
+
     public static bool IsLeadingSurrogate(this uint codePoint)
     {
         return codePoint >= 0xD800 && codePoint <= 0xDBFF;
