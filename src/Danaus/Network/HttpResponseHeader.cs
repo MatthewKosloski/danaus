@@ -54,4 +54,22 @@ public class HttpResponseHeader(string name) : HttpHeader(name)
     {
         return Headers().FirstOrDefault(header => header.Name == name);
     }
+
+    public override bool Equals(Object? other)
+    {
+        if (other == null || !(other is HttpResponseHeader))
+        {
+            return false;
+        }
+        else
+        {
+            var otherHttpResponseHeader = (HttpResponseHeader)other;
+            return otherHttpResponseHeader.Name == this.Name;
+        }
+    }
+
+    public override int GetHashCode()
+    {
+        return Name.GetHashCode();
+    }
 }
