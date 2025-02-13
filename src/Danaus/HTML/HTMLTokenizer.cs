@@ -68,7 +68,7 @@ enum State
     ScriptDataDoubleEscaped,
     ScriptDataDoubleEscapedDash,
     ScriptDataDoubleEscapedDashDash,
-    ScriptDataDoubleEscapedLessThan,
+    ScriptDataDoubleEscapedLessThanSign,
     ScriptDataDoubleEscapeEnd,
     ScriptDataDoubleEscapeStart,
     ScriptDataEndTagName,
@@ -107,6 +107,9 @@ class HTMLTokenizer(StreamReader input)
     private bool ShouldReconsume = false;
 
     private StringBuilder TempBuffer = new();
+
+    // A reference to the last start tag token that was emitted.
+    private TagToken? LastStartTagToken = null;
 
     public HTMLToken? NextToken()
     {
@@ -282,7 +285,7 @@ class HTMLTokenizer(StreamReader input)
                 {
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
-                        CreateNewEndTagToken(string.Empty);
+                        CreateNewEndTagToken();
                         ReconsumeIn(State.TagName);
                     }
                     else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
@@ -320,19 +323,16 @@ class HTMLTokenizer(StreamReader input)
                     else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
                     {
                         SwitchTo(State.Data);
-                        EmitCurrentToken();
+                        EmitCurrentTagToken();
                     }
                     else if (CurrentCharacter.IsASCIIUpperAlpha())
                     {
-                        var token = GetCurrentTokenAsTagToken();
-                        char c = (char)CurrentCharacter;
-                        token.AppendToName(char.ToLower(c));
+                        AppendToCurrentTagTokenName(char.ToLower((char)CurrentCharacter));
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
-                        var token = GetCurrentTokenAsTagToken();
-                        token.AppendToName((char)CodePoint.ReplacementCharacter);
+                        AppendToCurrentTagTokenName(CodePoint.ReplacementCharacter);
                     }
                     else if (IsEOF())
                     {
@@ -341,8 +341,7 @@ class HTMLTokenizer(StreamReader input)
                     }
                     else
                     {
-                        var token = GetCurrentTokenAsTagToken();
-                        token.AppendToName((char)CurrentCharacter);
+                        AppendToCurrentTagTokenName((char)CurrentCharacter);
                     }
 
                     break;
@@ -352,7 +351,7 @@ class HTMLTokenizer(StreamReader input)
                 {
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
-                        TempBuffer = new(string.Empty);
+                        TempBuffer.Clear();
                         SwitchTo(State.RCDATAEndTagOpen);
                     }
                     else
@@ -368,7 +367,7 @@ class HTMLTokenizer(StreamReader input)
                 {
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
-                        CreateNewEndTagToken(string.Empty);
+                        CreateNewEndTagToken();
                         ReconsumeIn(State.RCDATAEndTagName);
                     }
                     else
@@ -380,11 +379,664 @@ class HTMLTokenizer(StreamReader input)
 
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-end-tag-name-state
+                case State.RCDATAEndTagName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.BeforeAttributeName);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RCDATA);   
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.SelfClosingStartTag);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RCDATA);   
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.Data);
+                            EmitCurrentTagToken();
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RCDATA);   
+                        }
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        AppendToCurrentTagTokenName(char.ToLower((char)CurrentCharacter));
+                        TempBuffer.Append(CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        AppendToCurrentTagTokenName((char)CurrentCharacter);
+                        TempBuffer.Append(CurrentCharacter); 
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        EmitTempBufferTokens();
+                        ReconsumeIn(State.RCDATA);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-less-than-sign-state
+                case State.RAWTEXTLessThanSign:
+                {
+                    if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        TempBuffer.Clear();
+                        SwitchTo(State.EndTagOpen);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        ReconsumeIn(State.RAWTEXT);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-open-state
+                case State.RAWTEXTEndTagOpen:
+                {
+                    if (CurrentCharacter.IsASCIIAlpha())
+                    {
+                        CreateNewEndTagToken();
+                        ReconsumeIn(State.RAWTEXTEndTagName);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        ReconsumeIn(State.RAWTEXT);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-name-state
+                case State.RAWTEXTEndTagName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.BeforeAttributeName);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RAWTEXT);  
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.SelfClosingStartTag);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RAWTEXT);   
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.Data);
+                            EmitCurrentTagToken();
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.RAWTEXT);   
+                        }
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        AppendToCurrentTagTokenName(char.ToLower((char)CurrentCharacter));
+                        TempBuffer.Append(CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        AppendToCurrentTagTokenName((char)CurrentCharacter);
+                        TempBuffer.Append(CurrentCharacter); 
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        EmitTempBufferTokens();
+                        ReconsumeIn(State.RAWTEXT);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-sign-state
+                case State.ScriptDataLessThanSign:
+                {
+                    if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        TempBuffer.Clear();
+                        SwitchTo(State.ScriptDataEndTagOpen);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.ExclamationMark))
+                    {
+                        SwitchTo(State.ScriptDataEscapeStart);
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.ExclamationMark);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        ReconsumeIn(State.ScriptData);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
+                case State.ScriptDataEndTagOpen:
+                {
+                    if (CurrentCharacter.IsASCIIAlpha())
+                    {
+                        CreateNewEndTagToken();
+                        ReconsumeIn(State.ScriptDataEndTagName);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        ReconsumeIn(State.ScriptData);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name-state
+                case State.ScriptDataEndTagName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.BeforeAttributeName);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptData);  
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.SelfClosingStartTag);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptData);   
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.Data);
+                            EmitCurrentTagToken();
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptData);   
+                        }
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        AppendToCurrentTagTokenName(char.ToLower((char)CurrentCharacter));
+                        TempBuffer.Append(CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        AppendToCurrentTagTokenName((char)CurrentCharacter);
+                        TempBuffer.Append(CurrentCharacter); 
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        EmitTempBufferTokens();
+                        ReconsumeIn(State.ScriptData);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-state
+                case State.ScriptDataEscapeStart:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataEscapeStart);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.ScriptData);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-dash-state
+                case State.ScriptDataEscapeStartDash:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataEscapedDashDash);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.ScriptData);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-state
+                case State.ScriptDataEscaped:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataEscapedDash);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataEscapedLessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-state
+                case State.ScriptDataEscapedDash:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataEscapedDashDash);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataEscapedLessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        SwitchTo(State.ScriptDataEscaped);
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        SwitchTo(State.ScriptDataEscaped);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-dash-state
+                case State.ScriptDataEscapedDashDash:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataEscapedLessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.ScriptData);
+                        EmitCharacterToken(CodePoint.GreaterThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        SwitchTo(State.ScriptDataEscaped);
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        SwitchTo(State.ScriptDataEscaped);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-less-than-sign-state
+                case State.ScriptDataEscapedLessThanSign:
+                {
+                    if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        TempBuffer.Clear();
+                        SwitchTo(State.ScriptDataEscapedEndTagOpen);
+                    }
+                    else if (CurrentCharacter.IsASCIIAlpha())
+                    {
+                        TempBuffer.Clear();
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        ReconsumeIn(State.ScriptDataDoubleEscapeStart);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        ReconsumeIn(State.ScriptDataEscaped);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-open-state
+                case State.ScriptDataEscapedEndTagOpen:
+                {
+                    if (CurrentCharacter.IsASCIIAlpha())
+                    {
+                        CreateNewEndTagToken();
+                        ReconsumeIn(State.ScriptDataEscapedEndTagName);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        ReconsumeIn(State.ScriptDataEscaped);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-name-state
+                case State.ScriptDataEscapedEndTagName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.BeforeAttributeName);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptDataEscaped);  
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.SelfClosingStartTag);
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptDataEscaped);
+                        }
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        if (IsCurrentTokenAnAppropriateEndTagToken())
+                        {
+                            SwitchTo(State.Data);
+                            EmitCurrentTagToken();
+                        }
+                        else
+                        {
+                            EmitCharacterToken(CodePoint.LessThanSign);
+                            EmitCharacterToken(CodePoint.Solidus);
+                            EmitTempBufferTokens();
+                            ReconsumeIn(State.ScriptDataEscaped);
+                        }
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        AppendToCurrentTagTokenName(char.ToLower((char)CurrentCharacter));
+                        TempBuffer.Append(CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        AppendToCurrentTagTokenName((char)CurrentCharacter);
+                        TempBuffer.Append(CurrentCharacter); 
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                        EmitCharacterToken(CodePoint.Solidus);
+                        EmitTempBufferTokens();
+                        ReconsumeIn(State.ScriptDataEscaped);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-start-state
+                case State.ScriptDataDoubleEscapeStart:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (TempBuffer.Equals("script"))
+                        {
+                            SwitchTo(State.ScriptDataDoubleEscaped);
+                        }
+                        else
+                        {
+                            SwitchTo(State.ScriptDataEscaped);
+                        }
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        TempBuffer.Append(char.ToLower((char)CurrentCharacter));
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        TempBuffer.Append(CurrentCharacter);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.ScriptDataEscaped);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-state
+                case State.ScriptDataDoubleEscaped:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscapedDash);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
+                case State.ScriptDataDoubleEscapedDash:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscapedDashDash);
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        SwitchTo(State.ScriptDataDoubleEscaped);
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscaped);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
+                case State.ScriptDataDoubleEscapedDashDash:
+                {
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        EmitCharacterToken(CodePoint.HyphenMinus);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
+                        EmitCharacterToken(CodePoint.LessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.ScriptData);
+                        EmitCharacterToken(CodePoint.GreaterThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        SwitchTo(State.ScriptDataDoubleEscaped);
+                        EmitCharacterToken(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-script-html-comment-like-text parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        SwitchTo(State.ScriptDataDoubleEscaped);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
+                case State.ScriptDataDoubleEscapedLessThanSign:
+                {
+                    if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        TempBuffer.Clear();
+                        SwitchTo(State.ScriptDataDoubleEscapeEnd);
+                        EmitCharacterToken(CodePoint.Solidus);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.ScriptDataDoubleEscaped);
+                    }
+                    break;
+                }
+                case State.ScriptDataDoubleEscapeEnd:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        if (TempBuffer.Equals("script"))
+                        {
+                            SwitchTo(State.ScriptDataEscaped);
+                        }
+                        else
+                        {
+                            SwitchTo(State.ScriptDataDoubleEscaped);
+                        }
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        TempBuffer.Append(char.ToLower((char)CurrentCharacter));
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else if (CurrentCharacter.IsASCIILowerAlpha())
+                    {
+                        TempBuffer.Append(CurrentCharacter);
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.ScriptDataDoubleEscaped);
+                    }
+                    break;
+                }
             }
-
         }
-
-        return null;
     }
 
     private void SwitchTo(State state)
@@ -409,7 +1061,7 @@ class HTMLTokenizer(StreamReader input)
         CreateNewToken(new TagToken(TagTokenType.Start, name));
     }
 
-    private void CreateNewEndTagToken(string name)
+    private void CreateNewEndTagToken(string name = "")
     {
         CreateNewToken(new TagToken(TagTokenType.End, name));
     }
@@ -429,19 +1081,40 @@ class HTMLTokenizer(StreamReader input)
         Tokens.Enqueue(new CharacterToken((char)CodePoint.ReplacementCharacter));
     }
 
-    private void EmitCurrentToken()
+    private void EmitCurrentTagToken()
     {
-        Tokens.Enqueue(CurrentToken);
-    }
-    
-    private void EmitCommentToken(string data)
-    {
-        Tokens.Enqueue(new CommentToken(data));
+        if (CurrentToken is not TagToken)
+        {
+            throw new InvalidOperationException("Current token is not a tag token.");
+        }
+
+        var currentTagToken = (TagToken)CurrentToken;
+
+        if (currentTagToken.IsStart())
+        {
+            LastStartTagToken = currentTagToken;
+        }
+
+        Tokens.Enqueue(currentTagToken);
     }
 
     private void EmitCharacterToken(CodePoint codePoint)
     {
-        Tokens.Enqueue(new CharacterToken((char)codePoint));
+        EmitCharacterToken((char)codePoint);
+    }
+
+    private void EmitCharacterToken(char c)
+    {
+        Tokens.Enqueue(new CharacterToken(c));
+    }
+
+    private void EmitTempBufferTokens()
+    {
+        var str = TempBuffer.ToString();
+        foreach (char c in str)
+        {
+            EmitCharacterToken(c);
+        }
     }
 
     private void EmitEndOfFileToken()
@@ -449,13 +1122,29 @@ class HTMLTokenizer(StreamReader input)
         Tokens.Enqueue(new EndOfFileToken());
     }
 
-    private TagToken GetCurrentTokenAsTagToken()
+    private void AppendToCurrentTagTokenName(char c)
     {
         if (CurrentToken is not TagToken)
         {
             throw new InvalidOperationException("Current token is not a tag token.");
         }
-        return (TagToken)CurrentToken;
+
+        var currentTagToken = (TagToken)CurrentToken;
+
+        currentTagToken.AppendToName(c);
+    }
+
+    private void AppendToCurrentTagTokenName(CodePoint codePoint)
+    {
+        AppendToCurrentTagTokenName((char)codePoint);
+    }
+
+    private bool IsCurrentTokenAnAppropriateEndTagToken()
+    {
+        return CurrentToken is TagToken currentTagToken
+            && LastStartTagToken is not null
+            && currentTagToken.IsEnd()
+            && currentTagToken.Matches(LastStartTagToken);
     }
 
     private bool IsEOF()
@@ -465,7 +1154,11 @@ class HTMLTokenizer(StreamReader input)
 
     private bool IsWhiteSpace()
     {
-        return CurrentCharacter.IsOneOf(CodePoint.Tab, CodePoint.LineFeed, CodePoint.FormFeed, CodePoint.Space);
+        return CurrentCharacter.IsOneOf(
+            CodePoint.Tab,
+            CodePoint.LineFeed,
+            CodePoint.FormFeed,
+            CodePoint.Space);
     }
 
     private void ConsumeNextInputCharacter()
