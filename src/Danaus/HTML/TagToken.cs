@@ -16,4 +16,19 @@ class TagToken(TagTokenType type, string name, bool isSelfClosing = false): HTML
     {
         Name += c;
     }
+
+    public bool IsStart()
+    {
+        return Type == TagTokenType.Start;
+    }
+
+    public bool IsEnd()
+    {
+        return Type == TagTokenType.End;
+    }
+
+    public bool Matches(HTMLToken token)
+    {
+        return token is TagToken tagToken && tagToken.Name == Name;
+    }
 }
