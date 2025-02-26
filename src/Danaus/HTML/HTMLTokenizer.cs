@@ -111,6 +111,8 @@ class HTMLTokenizer(StreamReader input)
     // A reference to the last start tag token that was emitted.
     private TagToken? LastStartTagToken = null;
 
+    private string? CurrentAttributeName = null;
+
     public HTMLToken? NextToken()
     {
         while (true)
@@ -1005,6 +1007,7 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-end-state
                 case State.ScriptDataDoubleEscapeEnd:
                 {
                     if (IsWhiteSpace())
@@ -1032,6 +1035,255 @@ class HTMLTokenizer(StreamReader input)
                     else
                     {
                         ReconsumeIn(State.ScriptDataDoubleEscaped);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
+                case State.BeforeAttributeName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.IsOneOf(CodePoint.Solidus, CodePoint.GreaterThanSign) || IsEOF())
+                    {
+                        ReconsumeIn(State.AfterAttributeName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.EqualsSign))
+                    {
+                        // This is an unexpected-equals-sign-before-attribute-name parse error.
+                        StartNewAttributeInCurrentTagToken(((char)CurrentCharacter).ToString(), string.Empty);
+                        SwitchTo(State.AttributeName);
+                    }
+                    else
+                    {
+                        StartNewAttributeInCurrentTagToken();
+                        ReconsumeIn(State.AttributeName);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
+                case State.AttributeName:
+                {
+                    if (IsWhiteSpace() || CurrentCharacter.IsOneOf(CodePoint.Solidus, CodePoint.GreaterThanSign) || IsEOF())
+                    {
+                        ReconsumeIn(State.AfterAttributeName);
+                    }
+                    else if (CurrentCharacter.IsOneOf(CodePoint.EqualsSign))
+                    {
+                        SwitchTo(State.BeforeAttributeValue);
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        AppendCharacterToCurrentAttributeNameOrFail(char.ToLower((char)CurrentCharacter));
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error. 
+                        AppendCharacterToCurrentAttributeNameOrFail((char)CodePoint.ReplacementCharacter);
+                    }
+                    else if (CurrentCharacter.IsOneOf(CodePoint.QuotationMark, CodePoint.Apostrophe, CodePoint.LessThanSign))
+                    {
+                        // This is an unexpected-character-in-attribute-name parse error.
+                        AppendCharacterToCurrentAttributeNameOrFail((char)CurrentCharacter);
+                    }
+                    else
+                    {
+                        AppendCharacterToCurrentAttributeNameOrFail((char)CurrentCharacter);
+                    }
+
+                    /*
+                    * TODO: When the user agent leaves the attribute name state (and before emitting the tag token,
+                    * if appropriate), the complete attribute's name must be compared to the other attributes on the
+                    * same token; if there is already an attribute on the token with the exact same name, then this
+                    * is a duplicate-attribute parse error and the new attribute must be removed from the token.
+                    */
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
+                case State.AfterAttributeName:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        SwitchTo(State.SelfClosingStartTag);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.EqualsSign))
+                    {
+                        SwitchTo(State.BeforeAttributeValue);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentTagToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        StartNewAttributeInCurrentTagToken();
+                        ReconsumeIn(State.AttributeName);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
+                case State.BeforeAttributeValue:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        SwitchTo(State.AttributeValueDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        SwitchTo(State.AttributeValueSingleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-attribute-value parse error.
+                        SwitchTo(State.Data);
+                        EmitCurrentTagToken();
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.AttributeValueUnquoted);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
+                case State.AttributeValueDoubleQuoted:
+                {
+                    if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        SwitchTo(State.AfterAttributeValueQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Ampersand))
+                    {
+                        ReturnState = State.AttributeValueDoubleQuoted;
+                        SwitchTo(State.CharacterReference);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CurrentCharacter);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
+                case State.AttributeValueSingleQuoted:
+                {
+                    if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        SwitchTo(State.AfterAttributeValueQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Ampersand))
+                    {
+                        ReturnState = State.AttributeValueSingleQuoted;
+                        SwitchTo(State.CharacterReference);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CurrentCharacter);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
+                case State.AttributeValueUnquoted:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BeforeAttributeName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Ampersand))
+                    {
+                        ReturnState = State.AttributeValueUnquoted;
+                        SwitchTo(State.CharacterReference);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentTagToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CodePoint.ReplacementCharacter);
+                    }
+                    else if (CurrentCharacter.IsOneOf(
+                        CodePoint.QuotationMark,
+                        CodePoint.Apostrophe,
+                        CodePoint.LessThanSign,
+                        CodePoint.EqualsSign,
+                        CodePoint.GraveAccent
+                    ))
+                    {
+                        // This is an unexpected-character-in-unquoted-attribute-value parse error.
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CurrentCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CurrentCharacter);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
+                case State.AfterAttributeValueQuoted:
+                {
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BeforeAttributeName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Solidus))
+                    {
+                        SwitchTo(State.SelfClosingStartTag);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentTagToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-whitespace-between-attributes parse error.
+                        ReconsumeIn(State.BeforeAttributeName);
                     }
                     break;
                 }
@@ -1122,21 +1374,55 @@ class HTMLTokenizer(StreamReader input)
         Tokens.Enqueue(new EndOfFileToken());
     }
 
-    private void AppendToCurrentTagTokenName(char c)
+    private TagToken GetCurrentTagTokenOrFail()
     {
         if (CurrentToken is not TagToken)
         {
             throw new InvalidOperationException("Current token is not a tag token.");
         }
 
-        var currentTagToken = (TagToken)CurrentToken;
+        return (TagToken)CurrentToken;
+    }
 
-        currentTagToken.AppendToName(c);
+    private void AppendToCurrentTagTokenName(char c)
+    {
+        GetCurrentTagTokenOrFail().AppendToName(c);
     }
 
     private void AppendToCurrentTagTokenName(CodePoint codePoint)
     {
         AppendToCurrentTagTokenName((char)codePoint);
+    }
+
+    private void StartNewAttributeInCurrentTagToken(string name = "", string value = "")
+    {
+        var currentTagToken = GetCurrentTagTokenOrFail();
+        currentTagToken.Attributes.Add(name, value);
+
+        CurrentAttributeName = name;
+    }
+
+    private void AppendCharacterToCurrentAttributeNameOrFail(char c)
+    {
+        if (CurrentAttributeName is null)
+        {
+            throw new InvalidOperationException("Cannot append character because there is no current attribute name.");
+        }
+
+        var currentTagToken = GetCurrentTagTokenOrFail();
+        currentTagToken.AppendToAttributeName(CurrentAttributeName, c);
+        CurrentAttributeName += c;
+    }
+
+    private void AppendCharacterToCurrentAttributeValueOrFail(char c)
+    {
+        if (CurrentAttributeName is null)
+        {
+            throw new InvalidOperationException("Cannot append character because there is no current attribute name.");
+        }
+
+        var currentTagToken = GetCurrentTagTokenOrFail();
+        currentTagToken.AppendToAttributeValue(CurrentAttributeName, c); 
     }
 
     private bool IsCurrentTokenAnAppropriateEndTagToken()
