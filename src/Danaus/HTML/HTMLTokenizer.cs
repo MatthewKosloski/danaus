@@ -1287,6 +1287,54 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
+                case State.SelfClosingStartTag:
+                {
+                    if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        var currentTagToken = GetCurrentTagTokenOrFail();
+                        currentTagToken.IsSelfClosing = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentTagToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-tag parse error.
+                        EmitEndOfFileToken();   
+                    }
+                    else
+                    {
+                        // This is an unexpected-solidus-in-tag parse error.
+                        ReconsumeIn(State.BeforeAttributeName);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#bogus-comment-state
+                case State.BogusComment:
+                {
+                    if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentCommentToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.ReplacementCharacter); 
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CurrentCharacter); 
+                    }
+                    break;
+                }
             }
         }
     }
@@ -1350,6 +1398,17 @@ class HTMLTokenizer(StreamReader input)
         Tokens.Enqueue(currentTagToken);
     }
 
+    private void EmitCurrentCommentToken()
+    {
+        if (CurrentToken is not CommentToken)
+        {
+            throw new InvalidOperationException("Current token is not a comment token.");
+        }
+
+        var currentCommentToken = (CommentToken)CurrentToken;
+        Tokens.Enqueue(currentCommentToken);
+    }
+
     private void EmitCharacterToken(CodePoint codePoint)
     {
         EmitCharacterToken((char)codePoint);
@@ -1382,6 +1441,16 @@ class HTMLTokenizer(StreamReader input)
         }
 
         return (TagToken)CurrentToken;
+    }
+
+    private CommentToken GetCurrentCommentTokenOrFail()
+    {
+        if (CurrentToken is not CommentToken)
+        {
+            throw new InvalidOperationException("Current token is not a comment token.");
+        }
+
+        return (CommentToken)CurrentToken;
     }
 
     private void AppendToCurrentTagTokenName(char c)
