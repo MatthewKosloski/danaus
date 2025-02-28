@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using Danaus.Core;
 
@@ -117,16 +118,13 @@ class HTMLTokenizer(StreamReader input)
     {
         while (true)
         {
-            if (!ShouldReconsume)
-            {
-                ConsumeNextInputCharacter();
-            }
-
             switch (State)
             {
                 // https://html.spec.whatwg.org/multipage/parsing.html#data-state
                 case State.Data:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Ampersand))
                     {
                         ReturnState = State.Data;
@@ -155,6 +153,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-state
                 case State.RCDATA:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Ampersand))
                     {
                         ReturnState = State.RCDATA;
@@ -183,6 +183,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-state
                 case State.RAWTEXT:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
                         SwitchTo(State.RAWTEXTLessThanSign);
@@ -206,6 +208,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-state
                 case State.ScriptData:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
                         SwitchTo(State.ScriptDataLessThanSign);
@@ -229,6 +233,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#plaintext-state
                 case State.PLAINTEXT:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
@@ -248,6 +254,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
                 case State.TagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.ExclamationMark))
                     {
                         SwitchTo(State.MarkupDeclarationOpen);
@@ -285,6 +293,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#end-tag-open-state
                 case State.EndTagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
                         CreateNewEndTagToken();
@@ -314,6 +324,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#tag-name-state
                 case State.TagName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         SwitchTo(State.BeforeAttributeName);
@@ -351,6 +363,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-less-than-sign-state
                 case State.RCDATALessThanSign:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
                         TempBuffer.Clear();
@@ -367,6 +381,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-end-tag-open-state
                 case State.RCDATAEndTagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
                         CreateNewEndTagToken();
@@ -384,6 +400,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rcdata-end-tag-name-state
                 case State.RCDATAEndTagName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (IsCurrentTokenAnAppropriateEndTagToken())
@@ -449,6 +467,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-less-than-sign-state
                 case State.RAWTEXTLessThanSign:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
                         TempBuffer.Clear();
@@ -464,6 +484,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-open-state
                 case State.RAWTEXTEndTagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
                         CreateNewEndTagToken();
@@ -480,6 +502,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#rawtext-end-tag-name-state
                 case State.RAWTEXTEndTagName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (IsCurrentTokenAnAppropriateEndTagToken())
@@ -545,6 +569,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-less-than-sign-state
                 case State.ScriptDataLessThanSign:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
                         TempBuffer.Clear();
@@ -566,6 +592,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-open-state
                 case State.ScriptDataEndTagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
                         CreateNewEndTagToken();
@@ -582,6 +610,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-end-tag-name-state
                 case State.ScriptDataEndTagName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (IsCurrentTokenAnAppropriateEndTagToken())
@@ -647,6 +677,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-state
                 case State.ScriptDataEscapeStart:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataEscapeStart);
@@ -661,6 +693,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escape-start-dash-state
                 case State.ScriptDataEscapeStartDash:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataEscapedDashDash);
@@ -675,6 +709,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-state
                 case State.ScriptDataEscaped:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataEscapedDash);
@@ -703,6 +739,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-state
                 case State.ScriptDataEscapedDash:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataEscapedDashDash);
@@ -733,6 +771,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-dash-dash-state
                 case State.ScriptDataEscapedDashDash:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         EmitCharacterToken(CodePoint.HyphenMinus);
@@ -767,6 +807,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-less-than-sign-state
                 case State.ScriptDataEscapedLessThanSign:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
                         TempBuffer.Clear();
@@ -788,6 +830,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-open-state
                 case State.ScriptDataEscapedEndTagOpen:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.IsASCIIAlpha())
                     {
                         CreateNewEndTagToken();
@@ -804,6 +848,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-escaped-end-tag-name-state
                 case State.ScriptDataEscapedEndTagName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (IsCurrentTokenAnAppropriateEndTagToken())
@@ -869,6 +915,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-start-state
                 case State.ScriptDataDoubleEscapeStart:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (TempBuffer.Equals("script"))
@@ -900,6 +948,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-state
                 case State.ScriptDataDoubleEscaped:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedDash);
@@ -929,6 +979,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
                 case State.ScriptDataDoubleEscapedDash:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedDashDash);
@@ -960,6 +1012,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
                 case State.ScriptDataDoubleEscapedDashDash:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         EmitCharacterToken(CodePoint.HyphenMinus);
@@ -995,6 +1049,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
                 case State.ScriptDataDoubleEscapedLessThanSign:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Solidus))
                     {
                         TempBuffer.Clear();
@@ -1010,6 +1066,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escape-end-state
                 case State.ScriptDataDoubleEscapeEnd:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         if (TempBuffer.Equals("script"))
@@ -1041,6 +1099,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-name-state
                 case State.BeforeAttributeName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         // Ignore the character.
@@ -1065,6 +1125,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#attribute-name-state
                 case State.AttributeName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace() || CurrentCharacter.IsOneOf(CodePoint.Solidus, CodePoint.GreaterThanSign) || IsEOF())
                     {
                         ReconsumeIn(State.AfterAttributeName);
@@ -1103,6 +1165,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-name-state
                 case State.AfterAttributeName:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         // Ignore the character.
@@ -1135,6 +1199,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#before-attribute-value-state
                 case State.BeforeAttributeValue:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         // Ignore the character.
@@ -1162,6 +1228,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(double-quoted)-state
                 case State.AttributeValueDoubleQuoted:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.QuotationMark))
                     {
                         SwitchTo(State.AfterAttributeValueQuoted);
@@ -1190,6 +1258,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(single-quoted)-state
                 case State.AttributeValueSingleQuoted:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.Apostrophe))
                     {
                         SwitchTo(State.AfterAttributeValueQuoted);
@@ -1218,6 +1288,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#attribute-value-(unquoted)-state
                 case State.AttributeValueUnquoted:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         SwitchTo(State.BeforeAttributeName);
@@ -1262,6 +1334,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#after-attribute-value-(quoted)-state
                 case State.AfterAttributeValueQuoted:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (IsWhiteSpace())
                     {
                         SwitchTo(State.BeforeAttributeName);
@@ -1290,6 +1364,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#self-closing-start-tag-state
                 case State.SelfClosingStartTag:
                 {
+                    ConsumeNextInputCharacter();
+
                     if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
                     {
                         var currentTagToken = GetCurrentTagTokenOrFail();
@@ -1312,6 +1388,8 @@ class HTMLTokenizer(StreamReader input)
                 // https://html.spec.whatwg.org/multipage/parsing.html#bogus-comment-state
                 case State.BogusComment:
                 {
+                    ConsumeNextInputCharacter();
+                    
                     if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
                     {
                         SwitchTo(State.Data);
@@ -1334,6 +1412,10 @@ class HTMLTokenizer(StreamReader input)
                         currentCommentToken.AppendToData(CurrentCharacter); 
                     }
                     break;
+                }
+                default:
+                {
+                    throw new UnreachableException($"Unhandled tokenizer state {State}");
                 }
             }
         }
@@ -1518,10 +1600,13 @@ class HTMLTokenizer(StreamReader input)
 
     private void ConsumeNextInputCharacter()
     {
-        // TODO: https://html.spec.whatwg.org/#preprocessing-the-input-stream
-        var next = Input.Read();
-        CurrentCharacter = next == -1
-            ? END_OF_FILE
-            : (uint)next;
+        if (!ShouldReconsume)
+        {
+            // TODO: https://html.spec.whatwg.org/#preprocessing-the-input-stream
+            var next = Input.Read();
+            CurrentCharacter = next == -1
+                ? END_OF_FILE
+                : (uint)next;
+        }
     }    
 }
