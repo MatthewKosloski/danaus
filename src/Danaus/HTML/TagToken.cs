@@ -9,7 +9,7 @@ class TagToken(TagTokenType type, string name, bool isSelfClosing = false): HTML
 {
     public TagTokenType Type { get; } = type;
     public string Name { get; protected set; } = name;
-    public bool IsSelfClosing { get; } = isSelfClosing;
+    public bool IsSelfClosing { get; set; } = isSelfClosing;
     public Dictionary<string, string> Attributes { get; } = [];
 
     public void AppendToName(char c)
