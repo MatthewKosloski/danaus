@@ -109,6 +109,8 @@ class HTMLTokenizer(StreamReader input)
 
     private StringBuilder TempBuffer = new();
 
+    private Queue<int> Buffer = [];
+
     // A reference to the last start tag token that was emitted.
     private TagToken? LastStartTagToken = null;
 
@@ -1413,6 +1415,277 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#markup-declaration-open-state
+                case State.MarkupDeclarationOpen:
+                {
+                    if (Match("--"))
+                    {
+                        CreateNewCommentToken();
+                        SwitchTo(State.CommentStart);
+                    }
+                    else if (Match("DOCTYPE", false))
+                    {
+                        SwitchTo(State.DOCTYPE);
+                    }
+                    else if (Match("[CDATA["))
+                    {
+                        // TODO: Handle adjusted current node case.
+                        // This is a cdata-in-html-content parse error.
+                        CreateNewCommentToken("[CDATA[");
+                        SwitchTo(State.BogusComment);
+                    }
+                    else
+                    {
+                        // This is an incorrectly-opened-comment parse error.
+                        CreateNewCommentToken();
+                        SwitchTo(State.BogusComment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-state
+                case State.CommentStart:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.CommentStartDash);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-closing-of-empty-comment parse error.
+                        SwitchTo(State.Data);
+                        EmitCurrentCommentToken();
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-start-dash-state
+                case State.CommentStartDash:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.CommentEnd);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-closing-of-empty-comment parse error.
+                        SwitchTo(State.Data);
+                        EmitCurrentCommentToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-comment parse error.
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-state
+                case State.Comment:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CurrentCharacter);
+                        SwitchTo(State.CommentLessThanSign);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.CommentEndDash);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-comment parse error.
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CurrentCharacter);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-state
+                case State.CommentLessThanSign:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.ExclamationMark))
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CurrentCharacter);
+                        SwitchTo(State.CommentLessThanSignBang);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.LessThanSign))
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CurrentCharacter);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-state
+                case State.CommentLessThanSignBang:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.CommentLessThanSignBangDash);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-state
+                case State.CommentLessThanSignBangDash:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        SwitchTo(State.CommentLessThanSignBangDashDash);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.CommentEndDash);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-less-than-sign-bang-dash-dash-state
+                case State.CommentLessThanSignBangDashDash:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.GreaterThanSign) || IsEOF())
+                    {
+                        ReconsumeIn(State.CommentEnd);
+                    }
+                    else
+                    {
+                        // This is a nested-comment parse error.
+                        ReconsumeIn(State.CommentEnd);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-dash-state
+                case State.CommentEndDash:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        ReconsumeIn(State.CommentEnd);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-comment parse error.
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-state
+                case State.CommentEnd:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentCommentToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.ExclamationMark))
+                    {
+                        SwitchTo(State.CommentEndBang);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-comment parse error.
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;  
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#comment-end-bang-state
+                case State.CommentEndBang:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.HyphenMinus))
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        currentCommentToken.AppendToData(CodePoint.ExclamationMark);
+                        SwitchTo(State.CommentEndDash);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an incorrectly-closed-comment parse error.
+                        SwitchTo(State.Data);
+                        EmitCurrentCommentToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-comment parse error.
+                        EmitCurrentCommentToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentCommentToken = GetCurrentCommentTokenOrFail();
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        currentCommentToken.AppendToData(CodePoint.HyphenMinus);
+                        currentCommentToken.AppendToData(CodePoint.ExclamationMark);
+                        SwitchTo(State.CommentEndDash);
+                        ReconsumeIn(State.Comment);
+                    }
+                    break;      
+                }
                 default:
                 {
                     throw new UnreachableException($"Unhandled tokenizer state {State}");
@@ -1448,7 +1721,7 @@ class HTMLTokenizer(StreamReader input)
         CreateNewToken(new TagToken(TagTokenType.End, name));
     }
 
-    private void CreateNewCommentToken(string data)
+    private void CreateNewCommentToken(string data = "")
     {
         CreateNewToken(new CommentToken(data));
     }
@@ -1598,15 +1871,64 @@ class HTMLTokenizer(StreamReader input)
             CodePoint.Space);
     }
 
+    private bool Match(string str, bool isCaseSensitive = true)
+    {
+        // Fill up the buffer with as many character from str as possible.
+        int cursor = 0;
+        if (isCaseSensitive)
+        {
+            while (cursor < str.Length && str[cursor] == Input.Peek())
+            {
+                Buffer.Enqueue(Input.Read());
+                cursor++;
+            }
+        }
+        else
+        {
+            while (cursor < str.Length && char.ToLower(str[cursor]) == char.ToLower((char)Input.Peek()))
+            {
+                Buffer.Enqueue(Input.Read());
+                cursor++;
+            }
+        }
+
+        /*
+        * If the input string str of length n matches the
+        * next n characters in the stream, then we have a
+        * match, so consume all of the characters.
+        * Otherwise, return false.
+        */
+        var isMatch = cursor == str.Length;
+        if (isMatch)
+        {
+            ConsumeNextInputCharacters(str.Length);
+        }
+
+        return isMatch;
+    }
+
     private void ConsumeNextInputCharacter()
     {
+        // TODO: https://html.spec.whatwg.org/#preprocessing-the-input-stream
+
         if (!ShouldReconsume)
         {
-            // TODO: https://html.spec.whatwg.org/#preprocessing-the-input-stream
-            var next = Input.Read();
+            // Read from our internal buffer before checking the stream.
+            var next = Buffer.Count > 0
+                ? Buffer.Dequeue()
+                : Input.Read();
+
             CurrentCharacter = next == -1
                 ? END_OF_FILE
                 : (uint)next;
         }
-    }    
+    }
+
+    private void ConsumeNextInputCharacters(int numCharacters)
+    {
+        for (int i = 0; i < numCharacters; i++)
+        {
+            ConsumeNextInputCharacter();
+        }
+    }
 }
