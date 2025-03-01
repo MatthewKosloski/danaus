@@ -2309,6 +2309,63 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-state
+                case State.CDATASection:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.RightSquareBracket))
+                    {
+                        SwitchTo(State.CDATASectionBracket);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-cdata parse error.
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-bracket-state
+                case State.CDATASectionBracket:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.RightSquareBracket))
+                    {
+                        SwitchTo(State.CDATASectionEnd);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.RightSquareBracket);
+                        ReconsumeIn(State.CDATASection);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#cdata-section-end-state
+                case State.CDATASectionEnd:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.RightSquareBracket))
+                    {
+                        EmitCharacterToken(CodePoint.RightSquareBracket);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                    }
+                    else
+                    {
+                        EmitCharacterToken(CodePoint.RightSquareBracket);
+                        EmitCharacterToken(CodePoint.RightSquareBracket);
+                        ReconsumeIn(State.CDATASection);
+                    }
+                    break;
+                }
                 default:
                 {
                     throw new UnreachableException($"Unhandled tokenizer state {State}");
