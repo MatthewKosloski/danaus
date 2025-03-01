@@ -1,9 +1,9 @@
 namespace Danaus.HTML;
 
-class DocTypeToken: HTMLToken 
+class DocTypeToken(string? name = null, bool forceQuirks = false, string? publicIdentifier = null, string? systemIdentifier = null): HTMLToken 
 {
-    public string? Name { get; } = null;
-    public string? PublicIdentifier { get; } = null;
-    public string? SystemIdentifier { get; } = null;
-    public bool ForceQuirks { get; } = false;
+    public string? Name { get; set; } = name;
+    public string? PublicIdentifier { get; set; } = publicIdentifier;
+    public string? SystemIdentifier { get; set; } = systemIdentifier;
+    public bool ForceQuirks { get; set; } = forceQuirks;
 }

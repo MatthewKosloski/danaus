@@ -1686,6 +1686,629 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;      
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-state
+                case State.DOCTYPE:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BeforeDOCTYPEName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        ReconsumeIn(State.BeforeDOCTYPEName);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        CreateNewDocTypeToken(null, true);
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-whitespace-before-doctype-name parse error.
+                        ReconsumeIn(State.BeforeDOCTYPEName);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-name-state
+                case State.BeforeDOCTYPEName:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        CreateNewDocTypeToken(char.ToString(char.ToLower((char)CurrentCharacter)));
+                        SwitchTo(State.DOCTYPEName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        CreateNewDocTypeToken(char.ToString((char)CodePoint.ReplacementCharacter));
+                        SwitchTo(State.DOCTYPEName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-doctype-name parse error.
+                        CreateNewDocTypeToken(null, true);
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        CreateNewDocTypeToken(null, true);
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        CreateNewDocTypeToken(char.ToString((char)CurrentCharacter));
+                        SwitchTo(State.DOCTYPEName);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-name-state
+                case State.DOCTYPEName:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.AfterDOCTYPEName);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (CurrentCharacter.IsASCIIUpperAlpha())
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.Name += char.ToLower((char)CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.Name += char.ToLower((char)CodePoint.ReplacementCharacter);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.Name += (char)CurrentCharacter;
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-name-state
+                case State.AfterDOCTYPEName:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else if (Match("PUBLIC", false))
+                    {
+                        SwitchTo(State.AfterDOCTYPEPublicKeyword);
+                    }
+                    else if (Match("SYSTEM", false))
+                    {
+                        SwitchTo(State.AfterDOCTYPESystemKeyword);
+                    }
+                    else
+                    {
+                        // This is an invalid-character-sequence-after-doctype-name parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-keyword-state
+                case State.AfterDOCTYPEPublicKeyword:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BeforeDOCTYPEPublicIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        // This is a missing-whitespace-after-doctype-public-keyword parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPEPublicIdentifierDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        // This is a missing-whitespace-after-doctype-public-keyword parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPEPublicIdentifierSingleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-public-identifier-state
+                case State.BeforeDOCTYPEPublicIdentifier:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPEPublicIdentifierDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPEPublicIdentifierSingleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(double-quoted)-state
+                case State.DOCTYPEPublicIdentifierDoubleQuoted:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        SwitchTo(State.AfterDOCTYPEPublicIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier += (char)CodePoint.ReplacementCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier += (char)CurrentCharacter;
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-public-identifier-(single-quoted)-state
+                case State.DOCTYPEPublicIdentifierSingleQuoted:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        SwitchTo(State.AfterDOCTYPEPublicIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier += (char)CodePoint.ReplacementCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-doctype-public-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.PublicIdentifier += (char)CurrentCharacter;
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-public-identifier-state
+                case State.AfterDOCTYPEPublicIdentifier:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BetweenDOCTYPEPublicAndSystemIdentifiers);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        // This is a missing-whitespace-between-doctype-public-and-system-identifiers parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierDoubleQuoted);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-system-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#between-doctype-public-and-system-identifiers-state
+                case State.BetweenDOCTYPEPublicAndSystemIdentifiers:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierSingleQuoted);
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-system-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-keyword-state
+                case State.AfterDOCTYPESystemKeyword:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        SwitchTo(State.BeforeDOCTYPESystemIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        // This is a missing-whitespace-after-doctype-system-keyword parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        // This is a missing-whitespace-after-doctype-system-keyword parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierSingleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-doctype-system-identifier parse error. 
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-system-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#before-doctype-system-identifier-state
+                case State.BeforeDOCTYPESystemIdentifier:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierDoubleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier = string.Empty;
+                        SwitchTo(State.DOCTYPESystemIdentifierSingleQuoted);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is a missing-doctype-system-identifier parse error. 
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is a missing-quote-before-doctype-system-identifier parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(double-quoted)-state
+                case State.DOCTYPESystemIdentifierDoubleQuoted:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.QuotationMark))
+                    {
+                        SwitchTo(State.AfterDOCTYPESystemIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier += (char)CodePoint.ReplacementCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-doctype-system-identifier parse error
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier += (char)CurrentCharacter;
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#doctype-system-identifier-(single-quoted)-state
+                case State.DOCTYPESystemIdentifierSingleQuoted:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.Apostrophe))
+                    {
+                        SwitchTo(State.AfterDOCTYPESystemIdentifier);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier += (char)CodePoint.ReplacementCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        // This is an abrupt-doctype-system-identifier parse error
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.SystemIdentifier += (char)CurrentCharacter;
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#after-doctype-system-identifier-state
+                case State.AfterDOCTYPESystemIdentifier:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (IsWhiteSpace())
+                    {
+                        // Ignore the character.
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (IsEOF())
+                    {
+                        // This is an eof-in-doctype parse error.
+                        var currentDoctypeToken = GetCurrentDocTypeTokenOrFail();
+                        currentDoctypeToken.ForceQuirks = true;
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // This is an unexpected-character-after-doctype-system-identifier parse error.
+                        ReconsumeIn(State.BogusDOCTYPE);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#bogus-doctype-state
+                case State.BogusDOCTYPE:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
+                    {
+                        SwitchTo(State.Data);
+                        EmitCurrentDocTypeToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.NullCharacter))
+                    {
+                        // This is an unexpected-null-character parse error.
+                        // Ignore the character.
+                    }
+                    else if (IsEOF())
+                    {
+                        EmitCurrentDocTypeToken();
+                        EmitEndOfFileToken();
+                    }
+                    else
+                    {
+                        // Ignore the character.
+                    }
+                    break;
+                }
                 default:
                 {
                     throw new UnreachableException($"Unhandled tokenizer state {State}");
@@ -1726,6 +2349,11 @@ class HTMLTokenizer(StreamReader input)
         CreateNewToken(new CommentToken(data));
     }
 
+    private void CreateNewDocTypeToken(string? name = null, bool forceQuirks = false, string? publicIdentifier = null, string? systemIdentifier = null)
+    {
+        CreateNewToken(new DocTypeToken(name, forceQuirks, publicIdentifier, systemIdentifier));
+    }
+
     private void EmitCurrentCharacterAsCharacterToken()
     {
         Tokens.Enqueue(new CharacterToken((char)CurrentCharacter));
@@ -1762,6 +2390,17 @@ class HTMLTokenizer(StreamReader input)
 
         var currentCommentToken = (CommentToken)CurrentToken;
         Tokens.Enqueue(currentCommentToken);
+    }
+
+    private void EmitCurrentDocTypeToken()
+    {
+        if (CurrentToken is not DocTypeToken)
+        {
+            throw new InvalidOperationException("Current token is not a doctype token.");
+        }
+
+        var currentDoctypeToken = (DocTypeToken)CurrentToken;
+        Tokens.Enqueue(currentDoctypeToken);
     }
 
     private void EmitCharacterToken(CodePoint codePoint)
@@ -1806,6 +2445,16 @@ class HTMLTokenizer(StreamReader input)
         }
 
         return (CommentToken)CurrentToken;
+    }
+
+    private DocTypeToken GetCurrentDocTypeTokenOrFail()
+    {
+        if (CurrentToken is not DocTypeToken)
+        {
+            throw new InvalidOperationException("Current token is not a doctype token.");
+        }
+
+        return (DocTypeToken)CurrentToken;
     }
 
     private void AppendToCurrentTagTokenName(char c)
