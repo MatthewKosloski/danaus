@@ -116,6 +116,8 @@ class HTMLTokenizer(StreamReader input)
 
     private string? CurrentAttributeName = null;
 
+    private uint CharacterReferenceCode = 0;
+
     public HTMLToken? NextToken()
     {
         while (true)
@@ -2366,6 +2368,234 @@ class HTMLTokenizer(StreamReader input)
                     }
                     break;
                 }
+                // https://html.spec.whatwg.org/multipage/parsing.html#character-reference-state
+                case State.CharacterReference:
+                {
+                    TempBuffer.Clear();
+                    TempBuffer.Append((char)CodePoint.Ampersand);
+
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIAlphaNumeric())
+                    {
+                        ReconsumeIn(State.NamedCharacterReference);
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Number))
+                    {
+                        TempBuffer.Append((char)CurrentCharacter);
+                        SwitchTo(State.NumericCharacterReference);
+                    }
+                    else
+                    {
+                        FlushCodePointsConsumedAsACharacterReference();
+                        ReconsumeInReturnState();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#named-character-reference-state
+                case State.NamedCharacterReference:
+                {
+                    // TODO
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#ambiguous-ampersand-state
+                case State.AmbiguousAmpersand:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIAlphaNumeric() && IsCharRefConsumedAsPartOfAttribute())
+                    {
+                        AppendCharacterToCurrentAttributeValueOrFail((char)CurrentCharacter);
+                    }
+                    else if (CurrentCharacter.IsASCIIAlphaNumeric())
+                    {
+                        EmitCurrentCharacterAsCharacterToken();
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Semicolon))
+                    {
+                        // This is an unknown-named-character-reference parse error.
+                        ReconsumeInReturnState();
+                    }
+                    else
+                    {
+                        ReconsumeInReturnState();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-state
+                case State.NumericCharacterReference:
+                {
+                    CharacterReferenceCode = 0;
+
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsOneOf(CodePoint.LowercaseX, CodePoint.UppercaseX))
+                    {
+                        TempBuffer.Append((char)CurrentCharacter);
+                        SwitchTo(State.HexadecimalCharacterReferenceStart);
+                    }
+                    else
+                    {
+                        ReconsumeIn(State.DecimalCharacterReferenceStart);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-start-state
+                case State.HexadecimalCharacterReferenceStart:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIHexDigit())
+                    {
+                        ReconsumeIn(State.HexadecimalCharacterReference);
+                    }
+                    else
+                    {
+                        // This is an absence-of-digits-in-numeric-character-reference parse error.
+                        FlushCodePointsConsumedAsACharacterReference();
+                        ReconsumeInReturnState();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-start-state
+                case State.DecimalCharacterReferenceStart:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIDigit())
+                    {
+                        ReconsumeIn(State.DecimalCharacterReference);
+                    }
+                    else
+                    {
+                        // This is an absence-of-digits-in-numeric-character-reference parse error.
+                        FlushCodePointsConsumedAsACharacterReference();
+                        ReconsumeInReturnState();
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#hexadecimal-character-reference-state
+                case State.HexadecimalCharacterReference:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIDigit() || CurrentCharacter.IsASCIIHexDigit())
+                    {
+                        CharacterReferenceCode *= 16;
+                        CharacterReferenceCode += CurrentCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Semicolon))
+                    {
+                        SwitchTo(State.NumericCharacterReferenceEnd);
+                    }
+                    else
+                    {
+                        // This is a missing-semicolon-after-character-reference parse error.
+                        ReconsumeIn(State.NumericCharacterReferenceEnd);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#decimal-character-reference-state
+                case State.DecimalCharacterReference:
+                {
+                    ConsumeNextInputCharacter();
+
+                    if (CurrentCharacter.IsASCIIDigit())
+                    {
+                        CharacterReferenceCode *= 10;
+                        CharacterReferenceCode += CurrentCharacter;
+                    }
+                    else if (CurrentCharacter.Is(CodePoint.Semicolon))
+                    {
+                        SwitchTo(State.NumericCharacterReferenceEnd);
+                    }
+                    else
+                    {
+                        // This is a missing-semicolon-after-character-reference parse error.
+                        ReconsumeIn(State.NumericCharacterReferenceEnd);
+                    }
+                    break;
+                }
+                // https://html.spec.whatwg.org/multipage/parsing.html#numeric-character-reference-end-state
+                case State.NumericCharacterReferenceEnd:
+                {
+                    if (CharacterReferenceCode == 0x00)
+                    {
+                        // This is a null-character-reference parse error.
+                        CharacterReferenceCode = 0xFFFD;
+                    }
+                    else if (CharacterReferenceCode > 0x10FFFF)
+                    {
+                        // This is a character-reference-outside-unicode-range parse error.
+                        CharacterReferenceCode = 0xFFFD;
+                    }
+                    else if (CharacterReferenceCode.IsSurrogate())
+                    {
+                        // This is a surrogate-character-reference parse error.
+                        CharacterReferenceCode = 0xFFFD;
+                    }
+                    else if (CharacterReferenceCode.IsNonCharacter())
+                    {
+                        // This is a noncharacter-character-reference parse error.
+                        CharacterReferenceCode = 0xFFFD;
+                    }
+                    else if (CharacterReferenceCode == 0x0D || (CharacterReferenceCode.IsControl() && !IsCharacterReferenceCodeWhiteSpace()))
+                    {
+                        // This is a control-character-reference parse error.
+                        CharacterReferenceCode = 0xFFFD;
+
+                        var conversionTable = new Dictionary<uint, CodePoint>
+                        {
+                            {0x80, CodePoint.EuroSign},
+                            {0x82, CodePoint.SingleLow9QuotationMark},
+                            {0x83, CodePoint.LatinSmallLetterFWithHook},
+                            {0x84, CodePoint.DoubleLow9QuotationMark},
+                            {0x85, CodePoint.HorizontalEllipsis},
+                            {0x86, CodePoint.Dagger},
+                            {0x87, CodePoint.DoubleDagger},
+                            {0x88, CodePoint.ModifiedLetterCircumflexAccent},
+                            {0x89, CodePoint.PerMilleSign},
+                            {0x8A, CodePoint.LatinCapitalLetterSWithCaron},
+                            {0x8B, CodePoint.SingleLeftPointingAngleQuotationMark},
+                            {0x8C, CodePoint.LatinCapitalLigatureOE},
+                            {0x8E, CodePoint.LatinCapitalLetterZWithCaron},
+                            {0x91, CodePoint.LeftSingleQuotationMark},
+                            {0x92, CodePoint.RightSingleQuotationMark},
+                            {0x93, CodePoint.LeftDoubleQuotationMark},
+                            {0x94, CodePoint.RightDoubleQuotationMark},
+                            {0x95, CodePoint.Bullet},
+                            {0x96, CodePoint.EnDash},
+                            {0x97, CodePoint.EmDash},
+                            {0x98, CodePoint.SmallTilde},
+                            {0x99, CodePoint.TradeMarkSign},
+                            {0x9A, CodePoint.LatinSmallLetterSWithCaron},
+                            {0x9B, CodePoint.SingleRightPointingAngleQuotationMark},
+                            {0x9C, CodePoint.LatinSmallLigatureOE},
+                            {0x9E, CodePoint.LatinSmallLetterZWithCaron},
+                            {0x9F, CodePoint.LatinCapitalLetterYWithDiaeresis},
+                        };
+
+                        foreach (KeyValuePair<uint, CodePoint> kvp in conversionTable)
+                        {
+                            if (CharacterReferenceCode == kvp.Key)
+                            {
+                                CharacterReferenceCode = (uint)kvp.Value;
+                                break;
+                            }
+                        }
+                    }
+
+                    TempBuffer.Clear();
+                    TempBuffer.Append(CharacterReferenceCode);
+
+                    FlushCodePointsConsumedAsACharacterReference();
+
+                    if (ReturnState is not null)
+                    {
+                        SwitchTo((State)ReturnState);
+                    }
+                    break;
+                }
                 default:
                 {
                     throw new UnreachableException($"Unhandled tokenizer state {State}");
@@ -2384,6 +2614,14 @@ class HTMLTokenizer(StreamReader input)
     {
         ShouldReconsume = true;
         SwitchTo(state);
+    }
+
+    private void ReconsumeInReturnState()
+    {
+        if (ReturnState is not null)
+        {
+            ReconsumeIn((State)ReturnState);
+        }
     }
 
     private void CreateNewToken(HTMLToken token)
@@ -2555,6 +2793,24 @@ class HTMLTokenizer(StreamReader input)
         currentTagToken.AppendToAttributeValue(CurrentAttributeName, c); 
     }
 
+    private bool IsCharRefConsumedAsPartOfAttribute()
+    {
+        return ReturnState == State.AttributeValueDoubleQuoted ||
+            ReturnState == State.AttributeValueSingleQuoted ||
+            ReturnState == State.AttributeValueUnquoted;
+    }
+
+    private void FlushCodePointsConsumedAsACharacterReference()
+    {
+        if (IsCharRefConsumedAsPartOfAttribute())
+        {
+            foreach (char c in TempBuffer.ToString())
+            {
+                AppendCharacterToCurrentAttributeValueOrFail(c);
+            }
+        }
+    }
+
     private bool IsCurrentTokenAnAppropriateEndTagToken()
     {
         return CurrentToken is TagToken currentTagToken
@@ -2575,6 +2831,15 @@ class HTMLTokenizer(StreamReader input)
             CodePoint.LineFeed,
             CodePoint.FormFeed,
             CodePoint.Space);
+    }
+
+    private bool IsCharacterReferenceCodeWhiteSpace()
+    {
+        return CharacterReferenceCode.IsOneOf(
+            CodePoint.Tab,
+            CodePoint.LineFeed,
+            CodePoint.FormFeed,
+            CodePoint.Space);    
     }
 
     private bool Match(string str, bool isCaseSensitive = true)
