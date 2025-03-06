@@ -2607,7 +2607,6 @@ class HTMLTokenizer(StreamReader input)
     private void SwitchTo(State state)
     {
         State = state;
-        ShouldReconsume = false;
     }
 
     private void ReconsumeIn(State state)
@@ -2892,6 +2891,10 @@ class HTMLTokenizer(StreamReader input)
             CurrentCharacter = next == -1
                 ? END_OF_FILE
                 : (uint)next;
+        }
+        else
+        {
+            ShouldReconsume = false;
         }
     }
 
