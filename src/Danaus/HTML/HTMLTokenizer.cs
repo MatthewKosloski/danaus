@@ -118,6 +118,8 @@ class HTMLTokenizer(StreamReader input)
 
     private uint CharacterReferenceCode = 0;
 
+    private bool DidEmitEOFToken = false;
+
     public HTMLToken? NextToken()
     {
         while (true)
@@ -142,14 +144,17 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
 
                     break;
@@ -172,14 +177,17 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitReplacementCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
 
                     break;
@@ -197,14 +205,17 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitReplacementCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
 
                     break; 
@@ -222,14 +233,17 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitReplacementCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
 
                     break; 
@@ -243,17 +257,18 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitReplacementCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
-
-                    break; 
                 }
                 // https://html.spec.whatwg.org/multipage/parsing.html#tag-open-state
                 case State.TagOpen:
@@ -284,6 +299,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is an eof-before-tag-name parse error. 
                         EmitCharacterToken(CodePoint.LessThanSign);
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -315,6 +331,7 @@ class HTMLTokenizer(StreamReader input)
                         EmitCharacterToken(CodePoint.LessThanSign);
                         EmitCharacterToken(CodePoint.Solidus);
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -342,6 +359,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIIUpperAlpha())
                     {
@@ -356,6 +374,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -440,6 +459,7 @@ class HTMLTokenizer(StreamReader input)
                         {
                             SwitchTo(State.Data);
                             EmitCurrentTagToken();
+                            return Tokens.Dequeue();
                         }
                         else
                         {
@@ -542,6 +562,7 @@ class HTMLTokenizer(StreamReader input)
                         {
                             SwitchTo(State.Data);
                             EmitCurrentTagToken();
+                            return Tokens.Dequeue();
                         }
                         else
                         {
@@ -585,6 +606,7 @@ class HTMLTokenizer(StreamReader input)
                         SwitchTo(State.ScriptDataEscapeStart);
                         EmitCharacterToken(CodePoint.LessThanSign);
                         EmitCharacterToken(CodePoint.ExclamationMark);
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -650,6 +672,7 @@ class HTMLTokenizer(StreamReader input)
                         {
                             SwitchTo(State.Data);
                             EmitCurrentTagToken();
+                            return Tokens.Dequeue();
                         }
                         else
                         {
@@ -687,6 +710,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataEscapeStart);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -703,6 +727,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataEscapedDashDash);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -719,6 +744,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataEscapedDash);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
@@ -728,15 +754,18 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an unexpected-null-character parse error.
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     break;
                 }
@@ -749,6 +778,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataEscapedDashDash);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
@@ -759,16 +789,19 @@ class HTMLTokenizer(StreamReader input)
                         // This is an unexpected-null-character parse error.
                         SwitchTo(State.ScriptDataEscaped);
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         SwitchTo(State.ScriptDataEscaped);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     break;
                 }
@@ -780,6 +813,7 @@ class HTMLTokenizer(StreamReader input)
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
@@ -789,22 +823,26 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptData);
                         EmitCharacterToken(CodePoint.GreaterThanSign);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
                         SwitchTo(State.ScriptDataEscaped);
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         SwitchTo(State.ScriptDataEscaped);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     break;
                 }
@@ -888,6 +926,7 @@ class HTMLTokenizer(StreamReader input)
                         {
                             SwitchTo(State.Data);
                             EmitCurrentTagToken();
+                            return Tokens.Dequeue();
                         }
                         else
                         {
@@ -932,16 +971,19 @@ class HTMLTokenizer(StreamReader input)
                             SwitchTo(State.ScriptDataEscaped);
                         }
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIIUpperAlpha())
                     {
                         TempBuffer.Append(char.ToLower((char)CurrentCharacter));
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIILowerAlpha())
                     {
                         TempBuffer.Append(CurrentCharacter);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -958,27 +1000,31 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedDash);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
                         EmitCharacterToken(CodePoint.LessThanSign);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
-                    break;
                 }
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-state
                 case State.ScriptDataDoubleEscapedDash:
@@ -989,29 +1035,33 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedDashDash);
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
                         EmitCharacterToken(CodePoint.LessThanSign);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
                         SwitchTo(State.ScriptDataDoubleEscaped);
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         SwitchTo(State.ScriptDataDoubleEscaped);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
-                    break;
                 }
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-dash-dash-state
                 case State.ScriptDataDoubleEscapedDashDash:
@@ -1021,34 +1071,39 @@ class HTMLTokenizer(StreamReader input)
                     if (CurrentCharacter.Is(CodePoint.HyphenMinus))
                     {
                         EmitCharacterToken(CodePoint.HyphenMinus);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.LessThanSign))
                     {
                         SwitchTo(State.ScriptDataDoubleEscapedLessThanSign);
                         EmitCharacterToken(CodePoint.LessThanSign);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
                     {
                         SwitchTo(State.ScriptData);
                         EmitCharacterToken(CodePoint.GreaterThanSign);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
                         // This is an unexpected-null-character parse error.
                         SwitchTo(State.ScriptDataDoubleEscaped);
                         EmitCharacterToken(CodePoint.ReplacementCharacter);
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-script-html-comment-like-text parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         SwitchTo(State.ScriptDataDoubleEscaped);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
-                    break;
                 }
                 // https://html.spec.whatwg.org/multipage/parsing.html#script-data-double-escaped-less-than-sign-state
                 case State.ScriptDataDoubleEscapedLessThanSign:
@@ -1060,6 +1115,7 @@ class HTMLTokenizer(StreamReader input)
                         TempBuffer.Clear();
                         SwitchTo(State.ScriptDataDoubleEscapeEnd);
                         EmitCharacterToken(CodePoint.Solidus);
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1083,16 +1139,19 @@ class HTMLTokenizer(StreamReader input)
                             SwitchTo(State.ScriptDataDoubleEscaped);
                         }
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIIUpperAlpha())
                     {
                         TempBuffer.Append(char.ToLower((char)CurrentCharacter));
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIILowerAlpha())
                     {
                         TempBuffer.Append(CurrentCharacter);
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1187,11 +1246,13 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1222,6 +1283,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is a missing-attribute-value parse error.
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1252,6 +1314,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1282,6 +1345,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1307,6 +1371,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
@@ -1328,6 +1393,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1352,11 +1418,13 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-tag parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1376,11 +1444,13 @@ class HTMLTokenizer(StreamReader input)
                         currentTagToken.IsSelfClosing = true;
                         SwitchTo(State.Data);
                         EmitCurrentTagToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-tag parse error.
-                        EmitEndOfFileToken();   
+                        EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1398,11 +1468,13 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentCommentToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
@@ -1458,6 +1530,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is an abrupt-closing-of-empty-comment parse error.
                         SwitchTo(State.Data);
                         EmitCurrentCommentToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1479,12 +1552,14 @@ class HTMLTokenizer(StreamReader input)
                         // This is an abrupt-closing-of-empty-comment parse error.
                         SwitchTo(State.Data);
                         EmitCurrentCommentToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-comment parse error.
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1520,6 +1595,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is an eof-in-comment parse error.
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1610,6 +1686,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is an eof-in-comment parse error.
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1628,6 +1705,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentCommentToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.ExclamationMark))
                     {
@@ -1643,6 +1721,7 @@ class HTMLTokenizer(StreamReader input)
                         // This is an eof-in-comment parse error.
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1670,12 +1749,14 @@ class HTMLTokenizer(StreamReader input)
                         // This is an incorrectly-closed-comment parse error.
                         SwitchTo(State.Data);
                         EmitCurrentCommentToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
                         // This is an eof-in-comment parse error.
                         EmitCurrentCommentToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1707,6 +1788,7 @@ class HTMLTokenizer(StreamReader input)
                         CreateNewDocTypeToken(null, true);
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1741,6 +1823,7 @@ class HTMLTokenizer(StreamReader input)
                         CreateNewDocTypeToken(null, true);
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1748,6 +1831,7 @@ class HTMLTokenizer(StreamReader input)
                         CreateNewDocTypeToken(null, true);
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1769,6 +1853,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.IsASCIIUpperAlpha())
                     {
@@ -1788,6 +1873,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1809,6 +1895,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1817,6 +1904,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else if (Match("PUBLIC", false))
                     {
@@ -1865,6 +1953,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1873,6 +1962,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1911,6 +2001,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1919,6 +2010,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1951,6 +2043,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1959,6 +2052,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -1989,6 +2083,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -1997,6 +2092,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2018,6 +2114,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.QuotationMark))
                     {
@@ -2033,6 +2130,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2056,6 +2154,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.QuotationMark))
                     {
@@ -2076,6 +2175,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2116,6 +2216,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -2124,6 +2225,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2162,6 +2264,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -2170,6 +2273,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2202,6 +2306,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -2210,6 +2315,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2240,6 +2346,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -2248,6 +2355,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2269,6 +2377,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (IsEOF())
                     {
@@ -2277,6 +2386,7 @@ class HTMLTokenizer(StreamReader input)
                         currentDoctypeToken.ForceQuirks = true;
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2294,6 +2404,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         SwitchTo(State.Data);
                         EmitCurrentDocTypeToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.NullCharacter))
                     {
@@ -2304,6 +2415,7 @@ class HTMLTokenizer(StreamReader input)
                     {
                         EmitCurrentDocTypeToken();
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
@@ -2324,10 +2436,12 @@ class HTMLTokenizer(StreamReader input)
                     {
                         // This is an eof-in-cdata parse error.
                         EmitEndOfFileToken();
+                        return Tokens.Dequeue();
                     }
                     else
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     break;
                 }
@@ -2355,6 +2469,7 @@ class HTMLTokenizer(StreamReader input)
                     if (CurrentCharacter.Is(CodePoint.RightSquareBracket))
                     {
                         EmitCharacterToken(CodePoint.RightSquareBracket);
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.GreaterThanSign))
                     {
@@ -2410,6 +2525,7 @@ class HTMLTokenizer(StreamReader input)
                     else if (CurrentCharacter.IsASCIIAlphaNumeric())
                     {
                         EmitCurrentCharacterAsCharacterToken();
+                        return Tokens.Dequeue();
                     }
                     else if (CurrentCharacter.Is(CodePoint.Semicolon))
                     {
@@ -2718,7 +2834,14 @@ class HTMLTokenizer(StreamReader input)
 
     private void EmitEndOfFileToken()
     {
-        Tokens.Enqueue(new EndOfFileToken());
+        if (!DidEmitEOFToken)
+        {
+            Tokens.Enqueue(new EndOfFileToken());
+        }
+        else
+        {
+            DidEmitEOFToken = true;
+        }
     }
 
     private TagToken GetCurrentTagTokenOrFail()
