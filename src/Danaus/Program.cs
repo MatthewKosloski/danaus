@@ -3,41 +3,41 @@ using OpenTK.Mathematics;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using SkiaSharp;
 using System.Drawing;
+using Danaus.Network;
+using Danaus.HTML;
 
 class Program
 {
 
-    unsafe static int Main(string[] args)
+    static async Task Main(string[] args)
     {
-        var window = CreateWindow();
+        // var str = "http://example.org";
+        // var request = HttpRequest.FromURLString(str);
+        // var res = await RequestService.GetResponse(request);
 
-        if (window == null)
-        {
-            // Failed to create a window.
-            GLFW.Terminate();
-            return -1;
-        }
+        MemoryStream memoryStream = new MemoryStream();
+        StreamWriter writer = new StreamWriter(memoryStream);
 
-        GLFW.SetKeyCallback(window, KeyCallback);
+        writer.WriteLine("<p>hi</p>");
+        writer.Flush(); // Ensure all data is written to the stream
 
-        GLFW.MakeContextCurrent(window);
+        // Reset the position of the stream to the beginning
+        memoryStream.Position = 0;
 
-        var skContext = GenerateSkiaContext();
-        var skSurface = GenerateSkiaSurface(skContext, new Size(800, 600));
+        StreamReader reader = new StreamReader(memoryStream);
 
-        var canvas = skSurface.Canvas;
-
-        while (!GLFW.WindowShouldClose(window))
-        {
-            Run(canvas);
-            canvas.Flush();
-            GLFW.SwapBuffers(window);
-            GLFW.PollEvents();
-        }
-
-        GLFW.Terminate();
-
-        return 0;
+        var htmlTokenizer = new HTMLTokenizer(reader);
+        var tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
+        tok = htmlTokenizer.NextToken();
     }
 
     private static void Run(SKCanvas canvas)

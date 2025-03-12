@@ -2783,7 +2783,7 @@ class HTMLTokenizer(StreamReader input)
 
         var currentTagToken = (TagToken)CurrentToken;
 
-        if (currentTagToken.IsStart())
+        if (currentTagToken.IsStartTag())
         {
             LastStartTagToken = currentTagToken;
         }
@@ -2937,7 +2937,7 @@ class HTMLTokenizer(StreamReader input)
     {
         return CurrentToken is TagToken currentTagToken
             && LastStartTagToken is not null
-            && currentTagToken.IsEnd()
+            && currentTagToken.IsEndTag()
             && currentTagToken.Matches(LastStartTagToken);
     }
 
