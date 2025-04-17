@@ -44,9 +44,24 @@ abstract class HTMLToken
         return IsStartTag() && name == ((TagToken)this).Name;
     }
 
+    public bool IsEndTag(Core.TagName name)
+    {
+        return IsEndTag() && name == ((TagToken)this).Name;
+    }
+
     public bool IsOneOfTags(params Core.TagName[] tagNames)
     {
         return this is TagToken token && tagNames.Any(t => t.Name == token.Name);
+    }
+
+    public bool IsOneOfStartTags(params Core.TagName[] tagNames)
+    {
+        return IsStartTag() && IsOneOfTags(tagNames);
+    }
+
+    public bool IsOneOfEndTags(params Core.TagName[] tagNames)
+    {
+        return IsEndTag() && IsOneOfTags(tagNames);
     }
 
     public bool IsWhiteSpaceCharacter()
