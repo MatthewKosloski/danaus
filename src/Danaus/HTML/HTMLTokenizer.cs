@@ -2720,7 +2720,7 @@ class HTMLTokenizer(StreamReader input)
         }
     }
 
-    private void SwitchTo(State state)
+    public void SwitchTo(State state)
     {
         State = state;
     }
