@@ -30,6 +30,30 @@ class Element: Node
 
     public CustomElementState CustomElementState { get; set; }
 
+    public bool IsInHTMLNamespace => NamespaceURI is not null && NamespaceURI == Namespace.HTML;
+
+    public bool IsInMathMLNamespace => NamespaceURI is not null && NamespaceURI == Namespace.MathML;
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
+    public bool IsMathMLTextIntegrationPoint => IsInMathMLNamespace
+        && IsOneOf(MathML.TagName.Mi, MathML.TagName.Mo, MathML.TagName.Mn, MathML.TagName.Ms, MathML.TagName.Mtext);
+
+    // TODO
+    // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
+    public bool IsHTMLIntegrationPoint => false;
+
+    // https://dom.spec.whatwg.org/#concept-element-qualified-name
+    private string QualifiedName => Prefix is null
+        ? LocalName
+        : $"{Prefix}:{LocalName}";
+
+    // https://dom.spec.whatwg.org/#concept-element-defined
+    public bool IsDefined => CustomElementState == CustomElementState.Custom
+        || CustomElementState == CustomElementState.Uncustomized;
+    
+    // https://dom.spec.whatwg.org/#concept-element-custom
+    public bool IsCustom => CustomElementState == CustomElementState.Custom;
+    
     public Element(Document document, string localName, string? namespace_ = null, string? prefix = null): base(document)
     {
         Attributes = new(this);
@@ -47,23 +71,6 @@ class Element: Node
     {
         return tagNames.Any(t => t.Name == LocalName);
     }
-
-    public bool IsInHTMLNamespace => NamespaceURI is not null && NamespaceURI == Namespace.HTML;
-
-    public bool IsInMathMLNamespace => NamespaceURI is not null && NamespaceURI == Namespace.MathML;
-
-    // https://html.spec.whatwg.org/multipage/parsing.html#mathml-text-integration-point
-    public bool IsMathMLTextIntegrationPoint => IsInMathMLNamespace
-        && IsOneOf(MathML.TagName.Mi, MathML.TagName.Mo, MathML.TagName.Mn, MathML.TagName.Ms, MathML.TagName.Mtext);
-
-    // TODO
-    // https://html.spec.whatwg.org/multipage/parsing.html#html-integration-point
-    public bool IsHTMLIntegrationPoint => false;
-
-    // https://dom.spec.whatwg.org/#concept-element-qualified-name
-    private string QualifiedName => Prefix is null
-        ? LocalName
-        : $"{Prefix}:{LocalName}";
 
     // https://dom.spec.whatwg.org/#concept-node-equals
     public override bool Equals(Object? other)

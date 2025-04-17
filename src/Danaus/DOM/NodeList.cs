@@ -3,35 +3,44 @@ namespace Danaus.DOM;
 // https://dom.spec.whatwg.org/#nodelist
 class NodeList
 {
-    private List<Node> Nodes { get; } = [];
-
-    public ulong Length
-    {
-        get
-        {
-            return (ulong)Nodes.Count;
-        }
-    }
-
-    public Node? First
-    {
-        get
-        {
-            return Nodes.FirstOrDefault();
-        }
-    }
-
-    public Node? Last
-    {
-        get
-        {
-            return Nodes.LastOrDefault();
-        }
-    }
+    private List<Node> Nodes { get; set; } = [];
+    public ulong Length => (ulong)Nodes.Count;
+    public Node? First => Nodes.FirstOrDefault();
+    public Node? Last => Nodes.LastOrDefault();
 
     public Node? Item(ulong index)
     {
         return Nodes.ElementAtOrDefault((int)index);
+    }
+
+    public void Append(Node node)
+    {
+        if (!Nodes.Contains(node))
+        {
+            Nodes.Add(node);
+        }
+    }
+
+    public void InsertBefore(Node node, Node nodeToInsert)
+    {
+        if (Nodes.Contains(node) && !Nodes.Contains(nodeToInsert))
+        {
+            var index = Nodes.IndexOf(node);
+
+            if (index > 0)
+            {
+                Nodes.Insert(index - 1, nodeToInsert);
+            }
+            else if (index == 0)
+            {
+                Nodes = (List<Node>) Nodes.Prepend(node);
+            }
+        }
+    }
+
+    public void Remove(Node node)
+    {
+        Nodes.Remove(node);
     }
 
     public Node? Previous(Node node)
