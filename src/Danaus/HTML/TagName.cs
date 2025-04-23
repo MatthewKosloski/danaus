@@ -7,6 +7,7 @@ public sealed class TagName(string name): Core.TagName(name)
     public static TagName Bgsound => new("bgsound");
     public static TagName Body => new("body");
     public static TagName Br => new("br");
+    public static TagName Frameset => new("frameset");
     public static TagName Head => new("head");
     public static TagName Html => new("html");
     public static TagName Link => new("link");
