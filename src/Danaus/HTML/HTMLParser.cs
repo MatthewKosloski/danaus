@@ -392,6 +392,61 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
             // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inheadnoscript
             case InsertionMode.InHeadNoScript:
             {
+                if (token.IsDocTypeToken())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else if (token.IsStartTag(TagName.Html))
+                {
+                    // Process the token using the rules for the "in body" insertion mode.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsEndTag(TagName.Noscript))
+                {
+                    // Pop the current node (which will be a noscript element) from the stack of open elements;
+                    // the new current node will be a head element.
+                    StackOfOpenElements.Pop();
+
+                    // Switch the insertion mode to "in head".
+                    SwitchTo(InsertionMode.InHead);
+                }
+                else if (token.IsWhiteSpaceCharacter()
+                    || token.IsCommentToken()
+                    || token.IsOneOfStartTags(
+                        TagName.Basefront, TagName.Bgsound, TagName.Link,
+                        TagName.Meta, TagName.Noframes, TagName.Style))
+                {
+                    // Process the token using the rules for the "in head" insertion mode.
+                    ReprocessIn(InsertionMode.InHead);
+                }
+                else if (token.IsEndTag(TagName.Br))
+                {
+                    // Parse error.
+
+                    // Pop the current node (which will be a noscript element) from the stack of open elements;
+                    // the new current node will be a head element.
+                    StackOfOpenElements.Pop();
+
+                    // Switch the insertion mode to "in head".
+                    // Reprocess the token.
+                    ReprocessIn(InsertionMode.InHead);
+                }
+                else if (token.IsOneOfStartTags(TagName.Head, TagName.Noscript) || token.IsEndTag())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else
+                {
+                    // Parse error.
+
+                    // Pop the current node (which will be a noscript element) from the stack of open elements;
+                    // the new current node will be a head element.
+                    StackOfOpenElements.Pop();
+
+                    // Switch the insertion mode to "in head".
+                    // Reprocess the token.
+                    ReprocessIn(InsertionMode.InHead);
+                }
                 break;
             }
             default:
