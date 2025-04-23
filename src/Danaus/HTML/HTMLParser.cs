@@ -73,6 +73,9 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     // https://html.spec.whatwg.org/multipage/parsing.html#head-element-pointer
     private Element? HeadElement = null;
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#frameset-ok-flag
+    private bool FramesetOK = true;
+
     public void Run()
     {
         while (true)
@@ -447,6 +450,94 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                     // Reprocess the token.
                     ReprocessIn(InsertionMode.InHead);
                 }
+                break;
+            }
+            // https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode
+            case InsertionMode.AfterHead:
+            {
+                if (token.IsWhiteSpaceCharacter())
+                {
+                    InsertCharacter((CharacterToken)token);
+                }
+                else if (token.IsCommentToken())
+                {
+                    InsertComment((CommentToken)token);
+                }
+                else if (token.IsDocTypeToken())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else if (token.IsStartTag(TagName.Html))
+                {
+                    // Process the token using the rules for the "in body" insertion mode.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsStartTag(TagName.Body))
+                {
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+
+                    // Set the frameset-ok flag to "not ok".
+                    FramesetOK = false;
+
+                    // Switch the insertion mode to "in body".
+                    SwitchTo(InsertionMode.InBody);
+                }
+                else if (token.IsStartTag(TagName.Frameset))
+                {
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+
+                    // Switch the insertion mode to "in frameset".
+                    SwitchTo(InsertionMode.InFrameset);
+                }
+                else if (token.IsOneOfStartTags(
+                    TagName.Base, TagName.Basefront, TagName.Bgsound, TagName.Link,
+                    TagName.Meta, TagName.Noframes, TagName.Script, TagName.Style,
+                    TagName.Template, TagName.Title))
+                {
+                    // Parse error.
+                    
+                    if (HeadElement is not null)
+                    {
+                        // Push the node pointed to by the head element pointer onto the stack of open elements.
+                        StackOfOpenElements.Push(HeadElement);
+
+                        // Process the token using the rules for the "in head" insertion mode.
+                        ReprocessIn(InsertionMode.InHead);
+
+                        // Remove the node pointed to by the head element pointer from the stack of open elements.
+                        StackOfOpenElements.Pop();
+                    }
+                }
+                else if (token.IsEndTag(TagName.Template))
+                {
+                    // Process the token using the rules for the "in head" insertion mode.
+                    ReprocessIn(InsertionMode.InHead);
+                }
+                else if (token.IsOneOfEndTags(TagName.Body, TagName.Html, TagName.Br))
+                {
+                    // Insert an HTML element for a "body" start tag token with no attributes.
+                    InsertHTMLElementFor(new TagToken(TagTokenType.Start, TagName.Body.Name));
+
+                    // Switch the insertion mode to "in body".
+                    // Reprocess the current token.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsStartTag(TagName.Head) || token.IsEndTag())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else
+                {
+                    // Insert an HTML element for a "body" start tag token with no attributes.
+                    InsertHTMLElementFor(new TagToken(TagTokenType.Start, TagName.Body.Name));
+
+                    // Switch the insertion mode to "in body".
+                    // Reprocess the current token.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+
                 break;
             }
             default:
