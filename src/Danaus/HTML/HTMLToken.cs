@@ -79,4 +79,15 @@ abstract class HTMLToken
 
         return false;
     }
+
+    public bool IsCodePoint(CodePoint codePoint)
+    {
+        if (this is CharacterToken tok)
+        {
+            uint data = tok.Data;
+            return data.Is(codePoint);
+        }
+
+        return false;
+    }
 }
