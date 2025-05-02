@@ -76,6 +76,9 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     // https://html.spec.whatwg.org/multipage/parsing.html#frameset-ok-flag
     private bool FramesetOK = true;
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#list-of-active-formatting-elements
+    private ListOfActiveFormattingElements ActiveFormattingElements = new();
+
     public void Run()
     {
         while (true)
@@ -545,6 +548,23 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 throw new UnreachableException($"Unhandled insertion mode {InsertionMode}");
             }
         }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements
+    private void ReconstructActiveFormattingElements()
+    {
+        // 1. If there are no entries in the list of active formatting elements, then
+        //    there is nothing to reconstruct; stop this algorithm.
+
+        if (ActiveFormattingElements.IsEmpty())
+        {
+            return;
+        }
+
+        // TODO
+        // 2. If the last (most recently added) entry in the list of active formatting elements is a marker,
+        //    or if it is an element that is in the stack of open elements, then there is nothing to reconstruct;
+        //    stop this algorithm.
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#generic-rcdata-element-parsing-algorithm
