@@ -22,6 +22,11 @@ sealed class NamedNodeMap(Element element)
         return GetAttributeNS(namespace_, localName);
     }
 
+    public bool Contains(string name)
+    {
+        return List.Any(attr => attr.Name == name);
+    }
+
     // https://dom.spec.whatwg.org/#concept-element-attributes-get-by-namespace
     private Attr? GetAttributeNS(string? namespace_, string localName)
     {
