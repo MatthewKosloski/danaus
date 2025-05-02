@@ -53,11 +53,11 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
     private InsertionMode? CurrentTemplateInsertionMode = null;
 
-    private Stack<Element> StackOfOpenElements = new();
+    private StackOfOpenElements StackOfOpenElements = new();
 
     private bool IsFosterParentingEnabled = false;
 
-    private Element? CurrentNode => StackOfOpenElements.LastOrDefault();
+    private Element? CurrentNode => StackOfOpenElements.CurrentElement;
 
     // TODO: https://html.spec.whatwg.org/multipage/parsing.html#adjusted-current-node
     private Element? AdjustedCurrentNode => CurrentNode;
@@ -91,7 +91,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 // TODO: https://html.spec.whatwg.org/multipage/parsing.html#tree-construction-dispatcher
                 if (false
                     // If the stack of open elements is empty 
-                    || StackOfOpenElements.Count == 0
+                    || StackOfOpenElements.IsEmpty
                     // If the adjusted current node is an element in the HTML namespace
                     || (AdjustedCurrentNode is not null && AdjustedCurrentNode.IsInHTMLNamespace)
                     // If the adjusted current node is a MathML text integration point and the token is a start tag whose tag name is neither "mglyph" nor "malignmark"
