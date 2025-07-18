@@ -2,14 +2,9 @@ using Danaus.DOM;
 
 namespace Danaus.HTML;
 
-sealed class ActiveFormattingElement
+sealed class ActiveFormattingElement(Element? element)
 {
-    public Element? Element { get; }
+    public Element? Element { get; } = element;
 
     public bool IsMarker => Element is null;
-
-    public ActiveFormattingElement(Element element)
-    {
-        Element = element;
-    }
 }

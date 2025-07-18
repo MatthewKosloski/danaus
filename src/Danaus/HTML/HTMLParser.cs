@@ -79,6 +79,9 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     // https://html.spec.whatwg.org/multipage/parsing.html#list-of-active-formatting-elements
     private ListOfActiveFormattingElements ActiveFormattingElements = new();
 
+    // https://html.spec.whatwg.org/multipage/parsing.html#stack-of-template-insertion-modes
+    private Stack<InsertionMode> StackOfTemplateInsertionModes = new();
+
     public void Run()
     {
         while (true)
@@ -543,11 +546,732 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
                 break;
             }
+            // https://html.spec.whatwg.org/multipage/parsing.html#the-in-body-insertion-mode
+            case InsertionMode.InBody:
+            {
+                if (token.IsCodePoint(CodePoint.NullCharacter))
+                {
+                    // Parse error. Ignore the token.   
+                }
+                else if (token.IsWhiteSpaceCharacter())
+                {
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert the token's character.
+                    InsertCharacter((CharacterToken)token);
+                }
+                else if (token.IsCharacterToken())
+                {
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert the token's character.
+                    InsertCharacter((CharacterToken)token);
+
+                    // Set the frameset-ok flag to "not ok".
+                    FramesetOK = false;
+                }
+                else if (token.IsCommentToken())
+                {
+                    // Insert a comment.
+                    InsertComment((CommentToken)token);
+                }
+                else if (token.IsDocTypeToken())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else if (token.IsStartTag(TagName.Html))
+                {
+                    // Parse error.
+
+                    // If there is a template element on the stack of open elements, then ignore the token.
+                    if (StackOfOpenElements.ContainsOneOf(TagName.Template))
+                    {
+                        // Ignore the token.
+                    }
+                    else
+                    {
+                        // Otherwise, for each attribute on the token, check to see if
+                        // the attribute is already present on the top element of the stack of open elements.
+                        // If it is not, add the attribute and its corresponding value to that element.
+                        var topElement = StackOfOpenElements.CurrentElement;
+                        var tok = token as TagToken;
+
+                        if (topElement is not null && tok is not null)
+                        {
+                            foreach (var kvp in tok.Attributes)
+                            {
+                                if (!topElement.Attributes.Contains(kvp.Key))
+                                {
+                                    topElement.Attributes.SetNamedItem(new Attr(document, kvp.Key, kvp.Value));
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (token.IsOneOfStartTags(TagName.Base, TagName.Basefront, TagName.Bgsound,
+                TagName.Link, TagName.Meta, TagName.Noframes, TagName.Script, TagName.Style,
+                TagName.Template, TagName.Title) || token.IsEndTag(TagName.Template))
+                {
+                    // Process the token using the rules for the "in head" insertion mode.
+                    ReprocessIn(InsertionMode.InHead);
+                }
+                else if (token.IsStartTag(TagName.Body))
+                {
+                    // Parse error.
+
+                    var secondElement = StackOfOpenElements.At(1);
+
+                    // If the stack of open elements has only one node on it,
+                    // if the second element on the stack of open elements is not a body element,
+                    // or if there is a template element on the stack of open elements,
+                    // then ignore the token. (fragment case or there is a template element on the stack)
+                    if (StackOfOpenElements.Count == 1
+                        || secondElement is not null && secondElement.LocalName != TagName.Body
+                        || StackOfOpenElements.ContainsOneOf(TagName.Template))
+                    {
+                        // Ignore the token.
+                    }
+                    // Otherwise, set the frameset-ok flag to "not ok"; then, for each attribute on the token,
+                    // check to see if the attribute is already present on the body element (the second element)
+                    // on the stack of open elements, and if it is not, add the attribute and its corresponding
+                    // value to that element.
+                    else
+                    {
+                        FramesetOK = false;
+
+                        var tok = token as TagToken;
+                        if (secondElement is not null && tok is not null)
+                        {
+                            foreach (var kvp in tok.Attributes)
+                            {
+                                if (!secondElement.Attributes.Contains(kvp.Key))
+                                {
+                                    secondElement.Attributes.SetNamedItem(new Attr(document, kvp.Key, kvp.Value));
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (token.IsStartTag(TagName.Frameset))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsEndOfFileToken())
+                {
+                    // If the stack of template insertion modes is not empty,
+                    // then process the token using the rules for the "in template" insertion mode.
+                    if (StackOfTemplateInsertionModes.Count > 0)
+                    {
+                        ReprocessIn(InsertionMode.InTemplate);
+                    }
+                    else
+                    {
+                        // If there is a node in the stack of open elements that is not either a dd element, 
+                        // a dt element, an li element, an optgroup element, an option element, a p element, 
+                        // an rb element, an rp element, an rt element, an rtc element, a tbody element, 
+                        // a td element, a tfoot element, a th element, a thead element, a tr element, 
+                        // the body element, or the html element, then this is a parse error.
+                        if (!StackOfOpenElements.ContainsOneOf(
+                            TagName.Dd, TagName.Dt, TagName.Li, TagName.Optgroup,
+                            TagName.Option, TagName.P, TagName.Rb, TagName.Rp,
+                            TagName.Rt, TagName.Rtc, TagName.Tbody, TagName.Td,
+                            TagName.Tfoot, TagName.Th, TagName.Thead, TagName.Tr,
+                            TagName.Body, TagName.Html))
+                        {
+                            // Parse error.
+                        }
+
+                        // Stop parsing.
+                        StopParsing();
+                    }
+                }
+                else if (token.IsEndTag(TagName.Body))
+                {
+                    // If the stack of open elements does not have a body element in scope, 
+                    // this is a parse error; ignore the token.
+                    if (!StackOfOpenElements.HasElementInScope(TagName.Body))
+                    {
+                        // Parse error. Ignore the token.
+                    }
+                    else if (!StackOfOpenElements.ContainsOneOf(
+                        TagName.Dd, TagName.Dt, TagName.Li, TagName.Optgroup,
+                        TagName.Option, TagName.P, TagName.Rb, TagName.Rp,
+                        TagName.Rt, TagName.Rtc, TagName.Tbody, TagName.Td,
+                        TagName.Tfoot, TagName.Th, TagName.Thead, TagName.Tr,
+                        TagName.Body, TagName.Html))
+                    {
+                        // Parse error.        
+                    }
+
+                    // Switch the insertion mode to "after body".
+                    SwitchTo(InsertionMode.AfterBody);
+                }
+                else if (token.IsEndTag(TagName.Html))
+                {
+                    // If the stack of open elements does not have a body element in scope, 
+                    // this is a parse error; ignore the token.
+                    if (!StackOfOpenElements.HasElementInScope(TagName.Body))
+                    {
+                        // Parse error. Ignore the token.
+                    }
+                    else if (!StackOfOpenElements.ContainsOneOf(
+                        TagName.Dd, TagName.Dt, TagName.Li, TagName.Optgroup,
+                        TagName.Option, TagName.P, TagName.Rb, TagName.Rp,
+                        TagName.Rt, TagName.Rtc, TagName.Tbody, TagName.Td,
+                        TagName.Tfoot, TagName.Th, TagName.Thead, TagName.Tr,
+                        TagName.Body, TagName.Html))
+                    {
+                        // Parse error.
+                    }
+
+                    // Switch the insertion mode to "after body".
+                    // Reprocess the token.
+                    ReprocessIn(InsertionMode.AfterBody);
+                }
+                else if (token.IsOneOfStartTags(TagName.Address, TagName.Article, TagName.Aside,
+                    TagName.Blockquote, TagName.Center, TagName.Details, TagName.Dialog,
+                    TagName.Dir, TagName.Div, TagName.Dl, TagName.Fieldset, TagName.Figcaption,
+                    TagName.Figure, TagName.Footer, TagName.Header, TagName.Hgroup, TagName.Main,
+                    TagName.Menu, TagName.Nav, TagName.Ol, TagName.P, TagName.Search,
+                    TagName.Section, TagName.Summary, TagName.Ul))
+                {
+                    // If the stack of open elements has a p element in button scope, then close a p element.
+                    if (StackOfOpenElements.HasElementInButtonScope(TagName.P))
+                    {
+                        CloseAPElement();
+                    }
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+                }
+                else if (token.IsOneOfStartTags(TagName.H1, TagName.H2, TagName.H3,
+                    TagName.H4, TagName.H5, TagName.H6))
+                {
+                    // If the stack of open elements has a p element in button scope, then close a p element.
+                    if (StackOfOpenElements.HasElementInButtonScope(TagName.P))
+                    {
+                        CloseAPElement();
+                    }
+
+                    // If the current node is an HTML element whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6",
+                    // then this is a parse error; pop the current node off the stack of open elements.
+                    if (CurrentNode is not null && CurrentNode.IsOneOf(TagName.H1, TagName.H2, TagName.H3, TagName.H4, TagName.H5, TagName.H6))
+                    {
+                        // Parse error.
+                        StackOfOpenElements.Pop();
+                    }
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+                }
+                else if (token.IsOneOfStartTags(TagName.Pre, TagName.Listing))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Form))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Li))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Dd, TagName.Dt))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Plaintext))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Button))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfEndTags(TagName.Address, TagName.Article, TagName.Aside,
+                    TagName.Blockquote, TagName.Button, TagName.Center, TagName.Details, TagName.Dialog,
+                    TagName.Dir, TagName.Div, TagName.Dl, TagName.Fieldset, TagName.Figcaption,
+                    TagName.Figure, TagName.Footer, TagName.Header, TagName.Hgroup, TagName.Listing,
+                    TagName.Main, TagName.Menu, TagName.Nav, TagName.Ol, TagName.Pre, TagName.Search,
+                    TagName.Section, TagName.Summary, TagName.Ul))
+                {
+                    // If the stack of open elements does not have an element in scope that
+                    // is an HTML element with the same tag name as that of the token, then
+                    // this is a parse error; ignore the token.
+                    if (!StackOfOpenElements.HasElementInScopeWithTagName(token))
+                    {
+                        // Parse error. Ignore the token.
+                    }
+                    else
+                    {
+                        // Otherwise, run these steps:
+
+                        var tagToken = (TagToken)token;
+
+                        // 1. Generate implied end tags.
+                        GenerateImpliedEndTags();
+
+                        // 2. If the current node is not an HTML element with the same tag name as that of the token,
+                        //    then this is a parse error.
+                        if (CurrentNode is not null && !CurrentNode.Is(tagToken.TagName))
+                        {
+                            // Parse error.
+                        }
+
+                        // 3. Pop elements from the stack of open elements until an HTML element with
+                        //    the same tag name as the token has been popped from the stack.
+                        StackOfOpenElements.PopUntil(tagToken.TagName);
+                    }
+
+                }
+                else if (token.IsEndTag(TagName.Form))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsEndTag(TagName.P))
+                {
+                    // If the stack of open elements does not have a p element in button scope,
+                    // then this is a parse error; insert an HTML element for a "p" start tag token with no attributes.
+                    if (!StackOfOpenElements.HasElementInButtonScope(TagName.P))
+                    {
+                        // Parse error.
+                        InsertHTMLElementFor(new TagToken(TagTokenType.Start, TagName.P.Name));
+                    }
+
+                    // Close a p element.
+                    CloseAPElement();
+                }
+                else if (token.IsStartTag(TagName.Li))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Dd, TagName.Dt))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfEndTags(TagName.H1, TagName.H2, TagName.H3,
+                    TagName.H4, TagName.H5, TagName.H6))
+                {
+                    // If the stack of open elements does not have an element in scope that is an HTML element
+                    // and whose tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6",
+                    // then this is a parse error; ignore the token.
+                    if (!StackOfOpenElements.HasElementInScopeWithTagName(token))
+                    {
+                        // Parse error. Ignore the token.
+                    }
+                    else
+                    {
+                        // Otherwise, run these steps:
+
+                        var tagToken = (TagToken)token;
+
+                        // 1. Generate implied end tags.
+                        GenerateImpliedEndTags();
+
+                        // 2. If the current node is not an HTML element with the same tag name as that of the token,
+                        //    then this is a parse error.
+                        if (CurrentNode is not null && !CurrentNode.Is(tagToken.TagName))
+                        {
+                            // Parse error.
+                        }
+
+                        // 3. Pop elements from the stack of open elements until an HTML element whose
+                        // tag name is one of "h1", "h2", "h3", "h4", "h5", or "h6" has been popped from the stack.
+                        StackOfOpenElements.PopUntil(tagToken.TagName);
+                    }
+                }
+                else if (token.IsEndTag(TagName.Sarcasm))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.A))
+                {
+                    /*
+                    * 1. If the list of active formatting elements contains an a element between
+                    *    the end of the list and the last marker on the list (or the start of the
+                    *    list if there is no marker on the list), then this is a parse error;
+                    *    run the adoption agency algorithm for the token, then remove that element
+                    *    from the list of active formatting elements and the stack of open elements
+                    *    if the adoption agency algorithm didn't already remove it (it might not have
+                    *    if the element is not in table scope).
+                    */
+                    // TODO
+
+                    // 2. Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // 3. Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+
+                    // 4. Push the element onto the list of active formatting elements.
+                    ActiveFormattingElements.Add(new ActiveFormattingElement(CurrentNode));
+                }
+                else if (token.IsOneOfStartTags(TagName.B, TagName.Big, TagName.Code,
+                    TagName.Em, TagName.Font, TagName.I, TagName.S, TagName.Small, TagName.Strike,
+                    TagName.Strong, TagName.Tt, TagName.U))
+                {
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+
+                    // Push the element onto the list of active formatting elements.
+                    ActiveFormattingElements.Add(new ActiveFormattingElement(CurrentNode));
+                }
+                else if (token.IsStartTag(TagName.Nobr))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfEndTags(TagName.A, TagName.B, TagName.Big, TagName.Code,
+                    TagName.Em, TagName.Font, TagName.I, TagName.Nobr, TagName.S, TagName.Small,
+                    TagName.Strike, TagName.Strong, TagName.Tt, TagName.U))
+                {
+                    // Do this
+                    // Run the adoption agency algorithm for the token.
+                }
+                else if (token.IsOneOfStartTags(TagName.Applet, TagName.Marquee, TagName.Object))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Table))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Br))
+                {
+                    // Parse error.
+
+                    // Drop the attributes from the token, and act as described in the next entry;
+                    // i.e. act as if this was a "br" start tag token with no attributes, rather than
+                    // the end tag token that it actually is.
+                    var tagToken = (TagToken)token;
+                    tagToken.ClearAttributes();
+
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor(tagToken);
+
+                    // Immediately pop the current node off the stack of open elements.
+                    StackOfOpenElements.Pop();
+
+                    // Acknowledge the token's self-closing flag, if it is set.
+                    tagToken.AcknowledgeSelfClosingFlagIfSet();
+
+                    // Set the frameset-ok flag to "not ok".
+                    FramesetOK = false;
+
+                }
+                else if (token.IsOneOfStartTags(TagName.Area, TagName.Br, TagName.Embed, TagName.Img, TagName.Keygen, TagName.Wbr))
+                {
+                    var tagToken = (TagToken)token;
+
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor(tagToken);
+
+                    // Immediately pop the current node off the stack of open elements.
+                    StackOfOpenElements.Pop();
+
+                    // Acknowledge the token's self-closing flag, if it is set.
+                    tagToken.AcknowledgeSelfClosingFlagIfSet();
+
+                    // Set the frameset-ok flag to "not ok".
+                    FramesetOK = false;
+                }
+                else if (token.IsStartTag(TagName.Input))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Param, TagName.Source, TagName.Track))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Hr))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Image))
+                {
+                    // Parse error. Change the token's tag name to "img" and reprocess it. (Don't ask.)
+                    var tokenImg = (TagToken)token;
+                    CurrentToken = new TagToken(TagTokenType.Start, TagName.Img.Name, tokenImg.IsSelfClosing, tokenImg.Attributes);
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsStartTag(TagName.Textarea))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Xmp))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Iframe))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Noembed)
+                    || token.IsStartTag(TagName.Noscript) && Document.IsScriptingEnabled)
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Select))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Optgroup, TagName.Option))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Rb, TagName.Rtc))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Rp, TagName.Rt))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Math))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag(TagName.Svg))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsOneOfStartTags(TagName.Caption, TagName.Col, TagName.Colgroup,
+                    TagName.Frame, TagName.Head, TagName.Tbody, TagName.Td, TagName.Tfoot,
+                    TagName.Th, TagName.Thead, TagName.Tr))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsStartTag())
+                {
+                    // Reconstruct the active formatting elements, if any.
+                    ReconstructActiveFormattingElements();
+
+                    // Insert an HTML element for the token.
+                    InsertHTMLElementFor((TagToken)token);
+                }
+                else if (token.IsEndTag())
+                {
+                    var tagToken = (TagToken)token;
+
+                    // 1. Initialize node to be the current node (the bottommost node of the stack).
+                    Element? node = null;
+
+                    // 2. Loop: If node is an HTML element with the same tag name as the token, then:
+                    for (int i = StackOfOpenElements.Count - 1; i >= 0; i--)
+                    {
+                        node = StackOfOpenElements.At(i);
+
+                        if (node is not null && node.Is(tagToken.TagName))
+                        {
+                            // 1. Generate implied end tags, except for HTML elements
+                            //    with the same tag name as the token.
+                            GenerateImpliedEndTags(tagToken.TagName);
+
+                            // 2. If node is not the current node, then this is a parse error.
+                            if (!node.Equals(CurrentNode))
+                            {
+                                // Parse error.
+                            }
+
+                            // 3. Pop all the nodes from the current node up to node, including node,
+                            //    then stop these steps.
+                            StackOfOpenElements.PopUntil(tagToken.TagName);
+                            break;
+                        }
+
+                        // 3. Otherwise, if node is in the special category, then this is a parse error;
+                        //    ignore the token, and return.
+                        if (node is not null && IsSpecial(node))
+                        {
+                            return;
+                        }
+
+                        // 4. Set node to the previous entry in the stack of open elements.
+                        // 5. Return to the step labeled loop.
+                    }
+                }
+                break;
+            }
+            case InsertionMode.Text:
+            {
+                // Do this next
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InTable:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InTableText:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InCaption:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InColumnGroup:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InTableBody:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InRow:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InCell:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InSelect:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InSelectInTable:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InTemplate:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.AfterBody:
+            {
+                // Do this next
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.InFrameset:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.AfterFrameset:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.AfterAfterBody:
+            {
+                // Do this next
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
+            case InsertionMode.AfterAfterFrameset:
+            {
+                // TODO
+                throw new NotImplementedException("Not implemented yet.");
+            }
             default:
             {
                 throw new UnreachableException($"Unhandled insertion mode {InsertionMode}");
             }
         }
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#close-a-p-element
+    public void CloseAPElement()
+    {
+        // 1. Generate implied end tags, except for p elements.
+        GenerateImpliedEndTags(TagName.P);
+
+        // 2. If the current node is not a p element, then this is a parse error.
+        if (CurrentNode is not null && CurrentNode.LocalName != TagName.P)
+        {
+            // Parse error.
+        }
+
+        // 3. Pop elements from the stack of open elements until a p element has been popped from the stack.
+        StackOfOpenElements.PopUntil(TagName.P);
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags
+    public void GenerateImpliedEndTags(TagName? exclude = null)
+    {
+        // While the current node is a dd element, a dt element, an li element, an optgroup element,
+        // an option element, a p element, an rb element, an rp element, an rt element, or an rtc element,
+        // the UA must pop the current node off the stack of open elements.
+
+        var currentNode = StackOfOpenElements.CurrentElement;
+
+        var includeAll = exclude is null;
+
+        while (currentNode is not null)
+        {
+            if (currentNode.IsOneOf(
+                TagName.Dd, TagName.Dt, TagName.Li, TagName.Optgroup,
+                TagName.Option, TagName.P, TagName.Rb, TagName.Rp,
+                TagName.Rt, TagName.Rtc))
+            {
+                var shouldExclude = exclude is not null && currentNode.LocalName == exclude;
+                if (includeAll || !shouldExclude)
+                {
+                    StackOfOpenElements.Pop();
+                }
+            }
+            currentNode = StackOfOpenElements.CurrentElement;
+        }
+
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#stop-parsing
+    private void StopParsing()
+    {
+        // TODO - Stop parsing the document.
+
+        // 4. Pop all the nodes off the stack of open elements.
+        StackOfOpenElements.Clear();
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements
@@ -845,6 +1569,40 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
         // 6. If the parser was not created as part of the HTML fragment parsing algorithm, 
         //    then pop the element queue from element's relevant agent's custom element reactions stack, 
         //    and invoke custom element reactions in that queue.
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#special
+    private bool IsSpecial(Element node)
+    {
+        return node is HTMLElement && (
+            node.IsOneOf(
+                TagName.Address, TagName.Applet, TagName.Area, TagName.Article,
+                TagName.Aside, TagName.Base, TagName.Basefront, TagName.Bgsound,
+                TagName.Blockquote, TagName.Body, TagName.Br, TagName.Button,
+                TagName.Caption, TagName.Center, TagName.Col, TagName.Colgroup,
+                TagName.Dd, TagName.Details, TagName.Dir, TagName.Div, TagName.Dl,
+                TagName.Dt, TagName.Embed, TagName.Fieldset, TagName.Figcaption,
+                TagName.Figure, TagName.Footer, TagName.Form, TagName.Frame,
+                TagName.Frameset, TagName.H1, TagName.H2, TagName.H3, TagName.H4,
+                TagName.H5, TagName.H6, TagName.Head, TagName.Header, TagName.Hgroup,
+                TagName.Hr, TagName.Html, TagName.Iframe, TagName.Img, TagName.Input,
+                TagName.Keygen, TagName.Li, TagName.Link, TagName.Listing, TagName.Main,
+                TagName.Marquee, TagName.Menu, TagName.Meta, TagName.Nav, TagName.Noembed,
+                TagName.Noframes, TagName.Noscript, TagName.Object, TagName.Ol, TagName.P,
+                TagName.Param, TagName.Plaintext, TagName.Pre, TagName.Script, TagName.Search,
+                TagName.Section, TagName.Select, TagName.Source, TagName.Style, TagName.Summary,
+                TagName.Table, TagName.Tbody, TagName.Td, TagName.Template, TagName.Textarea,
+                TagName.Tfoot, TagName.Th, TagName.Thead, TagName.Title, TagName.Tr, TagName.Track,
+                TagName.Ul, TagName.Wbr, TagName.Xmp
+            )
+            || node.IsOneOf(
+                MathML.TagName.Mi, MathML.TagName.Mo, MathML.TagName.Mn, MathML.TagName.Ms,
+                MathML.TagName.Mtext, MathML.TagName.Annotation_xml
+            )
+            || node.IsOneOf(
+                SVG.TagName.ForeignObject, SVG.TagName.Desc, SVG.TagName.Title
+            )
+        );
     }
 
     private HTMLToken? NextToken()
