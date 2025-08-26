@@ -76,6 +76,8 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     // https://html.spec.whatwg.org/multipage/parsing.html#frameset-ok-flag
     private bool FramesetOK = true;
 
+    private bool ParsingFragment = false;
+
     // https://html.spec.whatwg.org/multipage/parsing.html#list-of-active-formatting-elements
     private ListOfActiveFormattingElements ActiveFormattingElements = new();
 
@@ -1218,9 +1220,55 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
             }
             case InsertionMode.AfterBody:
             {
-                // Do this next
-                // TODO
-                throw new NotImplementedException("Not implemented yet.");
+                if (token.IsCharacterToken())
+                {
+                    // Process the token using the rules for the "in body" insertion mode.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsCommentToken())
+                {
+                    // Insert a comment as the last child of the first element
+                    // in the stack of open elements (the html element).
+                    var htmlElement = StackOfOpenElements.At(0);
+                    var commentToken = (CommentToken)token;
+                    var insertionLocation = new AdjustedInsertionLocation
+                    {
+                        Target = htmlElement,
+                    };
+                    InsertComment(commentToken, insertionLocation);
+                }
+                else if (token.IsDocTypeToken())
+                {
+                    // Parse error. Ignore the token.
+                }
+                else if (token.IsStartTag(TagName.Html))
+                {
+                    // Process the token using the rules for the "in body" insertion mode.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsEndTag(TagName.Html))
+                {
+                    // If the parser was created as part of the HTML fragment parsing algorithm,
+                    // this is a parse error; ignore the token. (fragment case).
+                    // Otherwise, switch the insertion mode to "after after body".
+                    if (!ParsingFragment)
+                    {
+                        SwitchTo(InsertionMode.AfterAfterBody);
+                    }
+                }
+                else if (token.IsEndOfFileToken())
+                {
+                    // Stop parsing.
+                    StopParsing();
+                }
+                else
+                {
+                    // Parse error.
+
+                    // Switch the insertion mode to "in body" and reprocess the token.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                break;
             }
             case InsertionMode.InFrameset:
             {
