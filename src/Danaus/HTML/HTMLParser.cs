@@ -1218,6 +1218,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 // TODO
                 throw new NotImplementedException("Not implemented yet.");
             }
+            // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-afterbody
             case InsertionMode.AfterBody:
             {
                 if (token.IsCharacterToken())
@@ -1280,11 +1281,35 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 // TODO
                 throw new NotImplementedException("Not implemented yet.");
             }
+            // https://html.spec.whatwg.org/multipage/parsing.html#the-after-after-body-insertion-mode
             case InsertionMode.AfterAfterBody:
             {
-                // Do this next
-                // TODO
-                throw new NotImplementedException("Not implemented yet.");
+                if (token.IsCommentToken())
+                {
+                    // Insert a comment as the last child of the Document object.
+                    var commentToken = (CommentToken)token;
+                    var insertionLocation = new AdjustedInsertionLocation
+                    {
+                        Target = Document,
+                    };
+                    InsertComment(commentToken, insertionLocation);
+                }
+                else if (token.IsDocTypeToken() || token.IsCharacterToken() || token.IsStartTag(TagName.Html))
+                {
+                    // Process the token using the rules for the "in body" insertion mode.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                else if (token.IsEndOfFileToken())
+                {
+                    // Stop parsing.
+                    StopParsing();
+                }
+                else
+                {
+                    // Parse error. Switch the insertion mode to "in body" and reprocess the token.
+                    ReprocessIn(InsertionMode.InBody);
+                }
+                break;
             }
             case InsertionMode.AfterAfterFrameset:
             {
