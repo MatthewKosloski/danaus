@@ -47,7 +47,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
     private InsertionMode InsertionMode = InsertionMode.Initial;
 
-    private InsertionMode? OriginalInsertionMode;
+    private InsertionMode OriginalInsertionMode = InsertionMode.Initial;
 
     private Stack<InsertionMode> TemplateInsertionModes = new();
 
@@ -184,7 +184,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                     {
                         // Append it to the Document object.
                         Document.InsertBefore(el);
-                        
+
                         // Put this element in the stack of open elements.
                         StackOfOpenElements.Push(el);
                     }
@@ -394,7 +394,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
                     // Switch the insertion mode to "after head".
                     // Reprocess the token.
-                    ReprocessIn(InsertionMode.AfterHead);  
+                    ReprocessIn(InsertionMode.AfterHead);
                 }
                 break;
             }
@@ -503,7 +503,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                     TagName.Template, TagName.Title))
                 {
                     // Parse error.
-                    
+
                     if (HeadElement is not null)
                     {
                         // Push the node pointed to by the head element pointer onto the stack of open elements.
@@ -1130,11 +1130,41 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 }
                 break;
             }
+            // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-incdata
             case InsertionMode.Text:
             {
-                // Do this next
-                // TODO
-                throw new NotImplementedException("Not implemented yet.");
+                if (token.IsCharacterToken())
+                {
+                    // Insert the token's character.
+                    InsertCharacter((CharacterToken)token);
+                }
+                else if (token.IsEndOfFileToken())
+                {
+                    // Parse error.
+
+                    // TODO: If the current node is a script element, then set its already started to true.
+
+                    // Pop the current node off the stack of open elements.
+                    StackOfOpenElements.Pop();
+
+                    // Switch the insertion mode to the original insertion mode and reprocess the token.
+                    InsertionMode = OriginalInsertionMode;
+                    ReprocessIn(InsertionMode);
+                }
+                else if (token.IsEndTag(TagName.Script))
+                {
+                    // TODO
+                    throw new NotImplementedException("Not implemented yet.");
+                }
+                else if (token.IsEndTag())
+                {
+                    // Pop the current node off the stack of open elements.
+                    StackOfOpenElements.Pop();
+
+                    // Switch the insertion mode to the original insertion mode.
+                    InsertionMode = OriginalInsertionMode;
+                }
+                break;
             }
             case InsertionMode.InTable:
             {
