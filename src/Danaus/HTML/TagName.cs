@@ -4,28 +4,6 @@ namespace Danaus.HTML;
 
 public sealed class TagName(string name) : Core.TagName(name)
 {
-
-    private static readonly Dictionary<string, TagName> _tagNames = [];
-
-    static TagName()
-    {
-        // Initialize the dictionary with all tag names
-        var fields = typeof(TagName).GetFields(BindingFlags.Public | BindingFlags.Static);
-        foreach (var field in fields)
-        {
-            if (field.FieldType == typeof(TagName))
-            {
-                var tagName = (TagName)field.GetValue(null)!;
-                _tagNames[tagName.Name] = tagName;
-            }
-        }
-    }
-
-    public static TagName? FromString(string name)
-    {
-        return _tagNames.TryGetValue(name, out var tagName) ? tagName : null;
-    }
-
     public static TagName A => new("a");
     public static TagName Address => new("address");
     public static TagName Applet => new("applet");
@@ -134,4 +112,26 @@ public sealed class TagName(string name) : Core.TagName(name)
     public static TagName Ul => new("ul");
     public static TagName Wbr => new("wbr");
     public static TagName Xmp => new("xmp");
+
+    private static readonly Dictionary<string, TagName> _tagNames = [];
+
+    static TagName()
+    {
+        // Initialize the dictionary with all tag names
+        var fields = typeof(TagName).GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .ToArray();
+        foreach (var field in fields)
+        {
+            if (field.PropertyType == typeof(TagName))
+            {
+                var tagName = (TagName)field.GetValue(null)!;
+                _tagNames[tagName.Name] = tagName;
+            }
+        }
+    }
+
+    public static TagName? FromString(string name)
+    {
+        return _tagNames.TryGetValue(name, out var tagName) ? tagName : null;
+    }
 }
