@@ -182,14 +182,11 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                     // with the Document as the intended parent.
                     var el = CreateElementFor((TagToken)token, Namespace.HTML, Document);
 
-                    if (el is not null)
-                    {
-                        // Append it to the Document object.
-                        Document.InsertBefore(el);
+                    // Append it to the Document object.
+                    Document.InsertBefore(el);
 
-                        // Put this element in the stack of open elements.
-                        StackOfOpenElements.Push(el);
-                    }
+                    // Put this element in the stack of open elements.
+                    StackOfOpenElements.Push(el);
                 }
                 else if (token.IsOneOfEndTags(TagName.Head, TagName.Body, TagName.Html, TagName.Br))
                 {
@@ -1528,7 +1525,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#create-an-element-for-the-token
-    private Element? CreateElementFor(TagToken token, Namespace namespace_, Node intendedParent)
+    private Element CreateElementFor(TagToken token, Namespace namespace_, Node intendedParent)
     {
         // TODO
         // 1. If the active speculative HTML parser is not null, then
@@ -1541,11 +1538,6 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
         // 3. Let document be intended parent's node document.
         var document = intendedParent.Document;
-
-        if (document is null)
-        {
-            return null;
-        }
 
         // 4. Let local name be the tag name of the token.
         var localName = token.Name;
@@ -1609,30 +1601,25 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-an-html-element
-    private Element? InsertHTMLElementFor(TagToken token)
+    private Element InsertHTMLElementFor(TagToken token)
     {
         return InsertForeignElement(token, Namespace.HTML, false);
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#insert-a-foreign-element
-    private Element? InsertForeignElement(TagToken token, Namespace _namespace, bool onlyAddToElementStack)
+    private Element InsertForeignElement(TagToken token, Namespace _namespace, bool onlyAddToElementStack)
     {
         // 1. Let the adjusted insertion location be the appropriate place for inserting a node.
         var adjustedInsertionLocation = GetAppropriatePlaceForInsertingANode();
 
         if (adjustedInsertionLocation.Target is null)
         {
-            return null;
+            throw new InvalidOperationException("Unable to find insertion location.");
         }
 
         // 2. Let element be the result of creating an element for the token in the given namespace,
         //    with the intended parent being the element in which the adjusted insertion location finds itself.
         var element = CreateElementFor(token, _namespace, adjustedInsertionLocation.Target);
-
-        if (element is null)
-        {
-            return null;
-        }
 
         // 3. If onlyAddToElementStack is false, then run insert an element at the adjusted insertion location with element.
         if (!onlyAddToElementStack)
