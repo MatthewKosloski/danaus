@@ -84,7 +84,7 @@ class ElementFactory
         {
             return element();
         }
-        
-        throw new InvalidOperationException($"Unknown local name {localName}.");
+
+        return new HTMLUnknownElement(document);
     }
 }
