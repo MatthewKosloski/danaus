@@ -1,4 +1,5 @@
 using Danaus.Core;
+using Danaus.HTML;
 
 namespace Danaus.DOM;
 
@@ -73,6 +74,7 @@ class ElementFactory
         var tagToElementMap = new Dictionary<string, Func<Element>>()
         {
             { HTML.TagName.Html.Name, () => new HTMLElement(document) },
+            { HTML.TagName.Head.Name, () => new HTMLHeadElement(document) },
         };
 
         if(tagToElementMap.TryGetValue(localName, out Func<Element>? element))
