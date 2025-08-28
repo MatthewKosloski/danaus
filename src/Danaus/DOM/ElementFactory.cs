@@ -73,8 +73,11 @@ class ElementFactory
     {
         var tagToElementMap = new Dictionary<string, Func<Element>>()
         {
-            { HTML.TagName.Html.Name, () => new HTMLElement(document) },
+            { HTML.TagName.Body.Name, () => new HTMLBodyElement(document) },
+            { HTML.TagName.Div.Name, () => new HTMLDivElement(document) },
             { HTML.TagName.Head.Name, () => new HTMLHeadElement(document) },
+            { HTML.TagName.Html.Name, () => new HTMLElement(document) },
+            { HTML.TagName.P.Name, () => new HTMLParagraphElement(document) }
         };
 
         if(tagToElementMap.TryGetValue(localName, out Func<Element>? element))
