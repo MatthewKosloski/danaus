@@ -78,6 +78,8 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
     private bool ParsingFragment = false;
 
+    private bool ShouldParse = true;
+
     // https://html.spec.whatwg.org/multipage/parsing.html#list-of-active-formatting-elements
     private ListOfActiveFormattingElements ActiveFormattingElements = new();
 
@@ -86,7 +88,7 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
     public void Run()
     {
-        while (true)
+        while (ShouldParse)
         {
             var token = NextToken();
 
@@ -118,6 +120,8 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
                 }
             }
         }
+
+        TheEnd();
     }
 
     private void ProcessToken(HTMLToken token)
@@ -1356,13 +1360,9 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
         }
     }
 
-    // https://html.spec.whatwg.org/multipage/parsing.html#stop-parsing
     private void StopParsing()
     {
-        // TODO - Stop parsing the document.
-
-        // 4. Pop all the nodes off the stack of open elements.
-        StackOfOpenElements.Clear();
+        ShouldParse = false;
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#reconstruct-the-active-formatting-elements
@@ -1650,6 +1650,15 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
         // 6. If the parser was not created as part of the HTML fragment parsing algorithm, 
         //    then pop the element queue from element's relevant agent's custom element reactions stack, 
         //    and invoke custom element reactions in that queue.
+    }
+
+    // https://html.spec.whatwg.org/multipage/parsing.html#the-end
+    private void TheEnd()
+    {
+        // TODO
+
+        // 4. Pop all the nodes off the stack of open elements.
+        StackOfOpenElements.Clear();
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#special
