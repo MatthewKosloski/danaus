@@ -1342,30 +1342,18 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
     // https://html.spec.whatwg.org/multipage/parsing.html#generate-implied-end-tags
     public void GenerateImpliedEndTags(TagName? exclude = null)
     {
-        // While the current node is a dd element, a dt element, an li element, an optgroup element,
-        // an option element, a p element, an rb element, an rp element, an rt element, or an rtc element,
-        // the UA must pop the current node off the stack of open elements.
-
-        var currentNode = StackOfOpenElements.CurrentElement;
-
-        var includeAll = exclude is null;
-
-        while (currentNode is not null)
-        {
-            if (currentNode.IsOneOf(
+        // Pop the current node off the stack while it matches any of the implied end tag names,
+        // except for the excluded tag (if specified).
+        while (
+            CurrentNode is not null &&
+            CurrentNode.LocalName != exclude?.Name &&
+            CurrentNode.IsOneOf(
                 TagName.Dd, TagName.Dt, TagName.Li, TagName.Optgroup,
                 TagName.Option, TagName.P, TagName.Rb, TagName.Rp,
                 TagName.Rt, TagName.Rtc))
-            {
-                var shouldExclude = exclude is not null && currentNode.LocalName == exclude;
-                if (includeAll || !shouldExclude)
-                {
-                    StackOfOpenElements.Pop();
-                }
-            }
-            currentNode = StackOfOpenElements.CurrentElement;
+        {
+            StackOfOpenElements.Pop();
         }
-
     }
 
     // https://html.spec.whatwg.org/multipage/parsing.html#stop-parsing
