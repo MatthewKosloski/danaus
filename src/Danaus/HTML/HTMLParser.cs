@@ -187,6 +187,9 @@ class HTMLParser(Document document, HTMLTokenizer tokenizer)
 
                     // Put this element in the stack of open elements.
                     StackOfOpenElements.Push(el);
+                
+                    // Switch the insertion mode to "before head".
+                    SwitchTo(InsertionMode.BeforeHead);
                 }
                 else if (token.IsOneOfEndTags(TagName.Head, TagName.Body, TagName.Html, TagName.Br))
                 {
