@@ -46,7 +46,7 @@ class TagToken(TagTokenType type, string name, bool isSelfClosing = false, Dicti
 
         if (value is not null)
         {
-            Attributes.Add(name, value + c);
+            Attributes[name] = value + c;
         }
     }
 
