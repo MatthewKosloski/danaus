@@ -73,7 +73,8 @@ abstract class HTMLToken
                 CodePoint.Tab,
                 CodePoint.LineFeed,
                 CodePoint.FormFeed,
-                CodePoint.Space
+                CodePoint.Space,
+                CodePoint.CarriageReturn
             );
         }
 
