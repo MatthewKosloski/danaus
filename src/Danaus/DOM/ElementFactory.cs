@@ -75,9 +75,18 @@ class ElementFactory
         {
             { HTML.TagName.Body.Name, () => new HTMLBodyElement(document) },
             { HTML.TagName.Div.Name, () => new HTMLDivElement(document) },
+            { HTML.TagName.H1.Name, () => new HTMLHeading1Element(document) },
+            { HTML.TagName.H2.Name, () => new HTMLHeading2Element(document) },
+            { HTML.TagName.H3.Name, () => new HTMLHeading3Element(document) },
+            { HTML.TagName.H4.Name, () => new HTMLHeading4Element(document) },
+            { HTML.TagName.H5.Name, () => new HTMLHeading5Element(document) },
+            { HTML.TagName.H6.Name, () => new HTMLHeading6Element(document) },
             { HTML.TagName.Head.Name, () => new HTMLHeadElement(document) },
             { HTML.TagName.Html.Name, () => new HTMLElement(document) },
-            { HTML.TagName.P.Name, () => new HTMLParagraphElement(document) }
+            { HTML.TagName.Meta.Name, () => new HTMLMetaElement(document) },
+            { HTML.TagName.P.Name, () => new HTMLParagraphElement(document) },
+            { HTML.TagName.Style.Name, () => new HTMLStyleElement(document) },
+            { HTML.TagName.Title.Name, () => new HTMLTitleElement(document) },
         };
 
         if(tagToElementMap.TryGetValue(localName, out Func<Element>? element))
