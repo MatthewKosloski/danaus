@@ -3,7 +3,7 @@ using Danaus.WebIDL;
 namespace Danaus.DOM;
 
 // https://dom.spec.whatwg.org/#characterdata
-abstract class CharacterData(Document document, string data = ""): Node(document)
+abstract class CharacterData(Document document, string data = "") : Node(document)
 {
     // https://dom.spec.whatwg.org/#concept-cd-data
     public string Data { get; private set; } = data;
@@ -69,8 +69,25 @@ abstract class CharacterData(Document document, string data = ""): Node(document
         //     greater than offset plus count, increase its start offset by data’s length and decrease it by count.
         // 11. TODO - For each live range whose end node is node and end offset
         //     is greater than offset plus count, increase its end offset by data’s length and decrease it by count.
-        
+
         // 12. If node’s parent is non-null, then run the children changed steps for node’s parent.
         ParentNode?.ChildrenChanged();
+    }
+
+    public override bool Equals(Object? other)
+    {
+        if (other == null || other is not CharacterData)
+        {
+            return false;
+        }
+
+        var otherCharacterData = (CharacterData)other;
+
+        return Data.Equals(otherCharacterData.Data);
+    }
+
+    public override int GetHashCode()
+    {
+        return Data.GetHashCode();
     }
 }
