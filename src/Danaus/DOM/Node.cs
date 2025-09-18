@@ -212,40 +212,47 @@ abstract class Node: EventTarget
     // https://dom.spec.whatwg.org/#concept-node-equals
     public override bool Equals(Object? other)
     {
-        if (other == null || other is not Node)
+        if (other == null || other is not Node || this.GetType() != other.GetType())
         {
             return false;
         }
-        else
+
+        var otherNode = (Node)other;
+
+        if ((this is DocumentType thisDoc && otherNode is DocumentType otherDoc && !thisDoc.Equals(otherDoc)) ||
+            (this is Element thisElem && otherNode is Element otherElem && !thisElem.Equals(otherElem)) ||
+            (this is Attr thisAttr && otherNode is Attr otherAttr && !thisAttr.Equals(otherAttr)) ||
+            (this is Text thisText && otherNode is Text otherText && !thisText.Equals(otherText)) ||
+            (this is Comment thisComment && otherNode is Comment otherComment && !thisComment.Equals(otherComment)))
         {
-            var otherNode = (Node)other;
-
-            var thisChildren = ChildNodes.AsList();
-            var otherChildren = otherNode.ChildNodes.AsList();
-
-            var hasSameNumberOfChildren = thisChildren.Count == otherChildren.Count;
-
-            if (!hasSameNumberOfChildren)
-            {
-                return false;
-            }
-
-            var hasSameChildren = true;
-
-            for (int i = 0; i < (int)ChildNodes.Length; i++)
-            {
-                var thisChild = thisChildren.ElementAt(i);
-                var otherChild = otherChildren.ElementAt(i);
-
-                if (!thisChild.Equals(otherChild))
-                {
-                    hasSameChildren = false;
-                    break;
-                }
-            }
-
-            return hasSameNumberOfChildren && hasSameChildren;
+            return false;
         }
+
+        var thisChildren = ChildNodes.AsList();
+        var otherChildren = otherNode.ChildNodes.AsList();
+
+        var hasSameNumberOfChildren = thisChildren.Count == otherChildren.Count;
+
+        if (!hasSameNumberOfChildren)
+        {
+            return false;
+        }
+
+        var hasSameChildren = true;
+
+        for (int i = 0; i < (int)ChildNodes.Length; i++)
+        {
+            var thisChild = thisChildren.ElementAt(i);
+            var otherChild = otherChildren.ElementAt(i);
+
+            if (!thisChild.Equals(otherChild))
+            {
+                hasSameChildren = false;
+                break;
+            }
+        }
+
+        return hasSameNumberOfChildren && hasSameChildren;
     }
 
     // https://dom.spec.whatwg.org/#concept-node-children-changed-ext
