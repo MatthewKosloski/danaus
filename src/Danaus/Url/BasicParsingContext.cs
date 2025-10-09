@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Danaus.Url;
 
 class BasicParsingContext(string input, ParseResult result, Encoding? encoding, State? stateOverride, URL? baseUrl)

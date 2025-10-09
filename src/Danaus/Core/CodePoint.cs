@@ -1,52 +1,83 @@
-namespace Danaus.Url;
+namespace Danaus.Core;
 
 public enum CodePoint
 {
     Ampersand = 0x0026,
-    Asterisk = 0x002A,
     Apostrophe = 0x0027,
     ApplicationProgramCommand = 0x009F,
+    Asterisk = 0x002A,
+    Bullet = 0x2022,
     CarriageReturn = 0x000D,
     CircumflexAccent = 0x005E,
     Colon = 0x003A,
     Comma = 0x002C,
     CommercialAt = 0x0040,
+    Dagger = 0x2020,
     Delete = 0x007F,
     DollarSign = 0x0024,
+    DoubleDagger = 0x2021,
+    DoubleLow9QuotationMark = 0x201E,
+    EmDash = 0x2014,
+    EnDash = 0x2013,
     EqualsSign = 0x003D,
+    EuroSign = 0x20AC,
     ExclamationMark = 0x0021,
+    FormFeed = 0x000C,
     GraveAccent = 0x0060,
     GreaterThanSign = 0x003E,
+    HorizontalEllipsis = 0x2026,
     HyphenMinus = 0x002D,
+    LatinCapitalLetterSWithCaron = 0x0160,
+    LatinCapitalLetterYWithDiaeresis = 0x0178,
+    LatinCapitalLetterZWithCaron = 0x017D,
+    LatinCapitalLigatureOE = 0x0152,
+    LatinSmallLetterFWithHook = 0x0192,
+    LatinSmallLetterSWithCaron = 0x0161,
+    LatinSmallLetterZWithCaron = 0x017E,
+    LatinSmallLigatureOE = 0x0153,
     LeftCurlyBracket = 0x007B,
+    LeftDoubleQuotationMark = 0x201C,
     LeftParenthesis = 0x0028,
+    LeftSingleQuotationMark = 0x2018,
     LeftSquareBracket = 0x005B,
     LessThanSign = 0x003C,
     LineFeed = 0x000A,
     LowercaseA = 0x0061,
     LowercaseF = 0x0066,
+    LowercaseX = 0x0078,
     LowercaseZ = 0x007A,
     LowLine = 0x005F,
+    ModifiedLetterCircumflexAccent = 0x02C6,
     Nine = 0x0039,
     NullCharacter = 0x0000,
     Number = 0x0023,
     PercentSign = 0x0025,
     Period = 0x002E,
+    PerMilleSign = 0x2030,
     Plus = 0x002B,
     QuestionMark = 0x003F,
     QuotationMark = 0x022,
+    ReplacementCharacter = 0xFFFD,
     ReverseSolidus = 0x005C,
     RightCurlyBracket = 0x007D,
+    RightDoubleQuotationMark = 0x201D,
     RightParenthesis = 0x0029,
+    RightSingleQuotationMark = 0x2019,
     RightSquareBracket = 0x005D,
     Semicolon = 0x003B,
+    SingleLeftPointingAngleQuotationMark = 0x2039,
+    SingleLow9QuotationMark = 0x201A,
+    SingleRightPointingAngleQuotationMark = 0x203A,
+    SmallTilde = 0x02DC,
     Solidus = 0x002F,
     Space = 0x0020,
     Tab = 0x0009,
     Tilde = 0x007E,
+    TradeMarkSign = 0x2122,
     UnitSeparator = 0x001F,
     UppercaseA = 0x0041,
     UppercaseF = 0x0046,
+    UppercaseX = 0x0058,
     UppercaseZ = 0x005A,
     VerticalLine = 0x007C,
     Zero = 0x0030,
@@ -57,6 +88,11 @@ public static class CodePointExtension
     public static bool IsSpace(this uint codePoint)
     {
         return codePoint == (uint)CodePoint.Space;
+    }
+
+    public static bool IsControl(this uint codePoint)
+    {
+        return IsC0Control(codePoint) || (codePoint >= (uint)CodePoint.Delete && codePoint <= (uint)CodePoint.ApplicationProgramCommand);
     }
 
     public static bool IsC0Control(this uint codePoint)
@@ -132,6 +168,11 @@ public static class CodePointExtension
     public static bool IsOneOf(this uint codePoint, IEnumerable<uint> codePoints)
     {
         return codePoints.Any(c => c == codePoint);
+    }
+
+    public static bool Is(this uint codePoint, CodePoint cp)
+    {
+        return IsOneOf(codePoint, cp);
     }
 
     public static bool IsLeadingSurrogate(this uint codePoint)
